@@ -1,0 +1,10 @@
+services:
+  - name: my-python-service
+    environment_slug: python
+    environment_variables:
+      PYTHON_VERSION: "3.10"
+    build_command: "pip install -r requirements.txt"
+    run_command: "python main.py"
+    github:
+      repo: maxime0010/investments
+      branch: main
