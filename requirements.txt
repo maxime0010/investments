@@ -1,1 +1,4 @@
 benzinga
+urllib3
+requests
+six
