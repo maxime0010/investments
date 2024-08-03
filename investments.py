@@ -1,9 +1,12 @@
+import os
 from benzinga import financial_data
-
-api_key = "9f4b718a05a44b2ba4c48a5fff692647"
-fin = financial_data.Benzinga(api_key)
-
 from datetime import datetime, timedelta
+
+api_key = os.getenv("API_BENZINGA")
+if not api_key:
+    raise ValueError("No API key found in environment variables.")
+
+fin = financial_data.Benzinga(api_key)
 
 # Define the date range for the last 2 months
 date_to = datetime.now().strftime("%Y-%m-%d")
