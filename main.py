@@ -1,5 +1,8 @@
 import os
+
 from benzinga import financial_data
+from benzinga import news_data
+
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
