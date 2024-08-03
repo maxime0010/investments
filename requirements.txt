@@ -2,3 +2,4 @@ benzinga
 urllib3
 requests
 six
+python-dotenv
