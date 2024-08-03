@@ -7,13 +7,16 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
-api_key = os.getenv("BENZINGA_API_KEY")
-fin = financial_data.Benzinga(api_key)
 
 
 
-paper = news_data.News(api_key)
+import requests
 
-stories = paper.news()
+url = "https://api.benzinga.com/api/v1/analyst/insights"
 
-paper.output(stories)
+querystring = {"token":"9f4b718a05a44b2ba4c48a5fff692647","ticker":"AMZN"}
+
+response = requests.request("GET", url, params=querystring)
+
+print(response.text)
+
