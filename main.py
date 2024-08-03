@@ -2,9 +2,11 @@ import os
 from benzinga import financial_data
 from datetime import datetime, timedelta
 
-api_key = os.getenv("API_BENZINGA")
-if not api_key:
-    raise ValueError("No API key found in environment variables.")
+api_key = "9f4b718a05a44b2ba4c48a5fff692647"
+
+# api_key = os.getenv("API_BENZINGA")
+# if not api_key:
+#     raise ValueError("No API key found in environment variables.")
 
 fin = financial_data.Benzinga(api_key)
 
