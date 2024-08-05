@@ -1,22 +1,17 @@
 import os
 
 from benzinga import financial_data
-from benzinga import news_data
 
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 load_dotenv()
 
+api_key = os.getenv("BENZINGA_API_KEY")
+if not api_key:
+    raise ValueError("No API key found in environment variables.")
 
+fin = financial_data.Benzinga(api_key)
 
+stock_ratings = fin.ratings()
 
-import requests
-
-url = "https://api.benzinga.com/api/v1/analyst/insights"
-
-querystring = {"token":"9f4b718a05a44b2ba4c48a5fff692647","ticker":"AMZN"}
-
-response = requests.request("GET", url, params=querystring)
-
-print(response.text)
-
+fin.output(stock_ratings)
