@@ -1,6 +1,6 @@
 import os
 
-from benzinga import financial_data
+import benzinga
 
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
