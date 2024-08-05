@@ -16,8 +16,7 @@ load_dotenv()
 
 # Define the parameters for the API call
 parameters = {
-    'token': api_key,
-    'symbols': 'AMZN'
+    'company_tickers': 'AMZN'
 }
 
 fin.ratings(parameters)
