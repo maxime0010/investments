@@ -24,8 +24,8 @@ db_config = {
     'user': 'doadmin',
     'password': mdp,
     'host': 'db-mysql-nyc3-03005-do-user-4526552-0.h.db.ondigitalocean.com',
-    'database': 'defaultdb'
-    'port': 25060,
+    'database': 'defaultdb',
+    'port': 25060
 
 }
 
