@@ -2,6 +2,8 @@ import os
 import requests
 import benzinga
 import sys
+import mysql.connector
+
 
 token = os.getenv("BENZINGA_API_KEY")
 if not token:
