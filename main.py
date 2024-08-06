@@ -16,7 +16,7 @@ load_dotenv()
 
 # Define the parameters for the API call
 parameters = {
-    'company_tickers': 'AMZN'
+    "company_tickers":"AMZN"
 }
 
 fin.ratings(parameters)
