@@ -11,11 +11,12 @@ from benzinga import financial_data
 
 bz = financial_data.Benzinga(token)
 price = bz.delayed_quote(company_tickers = "AAPL") 
+rating = bz.ratings(company_tickers = "AAPL")
 
 
 def main():
     try:
-        print(bz.output(price))
+        print(bz.output(rating))
         exit_program()
                 
     except Exception as e:
