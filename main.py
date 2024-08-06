@@ -16,14 +16,8 @@ price = bz.delayed_quote(company_tickers = "AAPL")
 def main():
     try:
         print(bz.output(price))
-        
-        # Check for termination condition
-        user_input = input("Do you want to exit the program? (y/n): ")
-        if user_input.lower() == "y":
-            exit_program()
-        
-        # Continue with other operations
-        
+        exit_program()
+                
     except Exception as e:
         print(f"An error occurred: {e}")
         exit_program()
