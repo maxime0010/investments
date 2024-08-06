@@ -4,20 +4,10 @@ import benzinga
 
 from benzinga import financial_data
 
-api_key = os.getenv("BENZINGA_API_KEY")
-if not api_key:
+token = os.getenv("BENZINGA_API_KEY")
+if not token:
     raise ValueError("No API key found in environment variables")
 
-fin = financial_data.Benzinga(api_key)
-
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
-load_dotenv()
-
-# Define the parameters for the API call
-parameters = {
-    company_tickers = "AMZN"
-}
-
-fin.ratings(parameters)
-
+bz = financial_data.Benzinga(token)
+price = bz.delayed_quote(company_tickers = "AAPL") 
+print(bz.output(price))
