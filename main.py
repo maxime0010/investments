@@ -16,8 +16,12 @@ if not mdp:
 from benzinga import financial_data
 
 bz = financial_data.Benzinga(token)
-price = bz.delayed_quote(company_tickers = "AAPL") 
-rating = bz.ratings(company_tickers = "AAPL")
+
+# List of S&P 500 tickers (partial, you need to include all tickers)
+sp500_tickers = [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'FB', 'TSLA', 'BRK.B', 'NVDA', 'JPM', 'JNJ'
+    # Add all other S&P 500 tickers here
+]
 
 # Database connection
 db_config = {
@@ -59,16 +63,21 @@ def insert_rating_data(rating_data):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
+def fetch_and_store_ratings(tickers):
+    for ticker in tickers:
+        print(f"Fetching ratings for {ticker}")
+        rating = bz.ratings(company_tickers=ticker)
+        print(bz.output(rating))
+        insert_rating_data(rating)
 
 def main():
     try:
-        print(bz.output(rating))
-        insert_rating_data(rating)
+        fetch_and_store_ratings(sp500_tickers)
         exit_program()
-                
     except Exception as e:
         print(f"An error occurred: {e}")
         exit_program()
+
 
 def exit_program():
     print("Exiting the program...")
