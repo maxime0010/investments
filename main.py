@@ -43,8 +43,14 @@ def insert_rating_data(rating_data):
                       "%(time)s, %(updated)s, %(url)s, %(url_calendar)s, %(url_news)s)")
 
         for rating in rating_data["ratings"]:
-            cursor.execute(add_rating, rating)
+            # Ensure correct data types
+            rating["adjusted_pt_current"] = float(rating["adjusted_pt_current"]) if rating["adjusted_pt_current"] else None
+            rating["adjusted_pt_prior"] = float(rating["adjusted_pt_prior"]) if rating["adjusted_pt_prior"] else None
+            rating["pt_current"] = float(rating["pt_current"]) if rating["pt_current"] else None
+            rating["pt_prior"] = float(rating["pt_prior"]) if rating["pt_prior"] else None
 
+            cursor.execute(add_rating, rating)
+        
         conn.commit()
         cursor.close()
         conn.close()
