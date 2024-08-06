@@ -25,6 +25,8 @@ db_config = {
     'password': mdp,
     'host': 'db-mysql-nyc3-03005-do-user-4526552-0.h.db.ondigitalocean.com',
     'database': 'defaultdb'
+    'port': 25060,
+
 }
 
 def insert_rating_data(rating_data):
