@@ -3,4 +3,5 @@ urllib3
 requests
 six
 python-dotenv
-mysql
+mysql-connector-python
+
