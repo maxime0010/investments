@@ -1,6 +1,7 @@
 import os
 import requests
 import benzinga
+import sys
 
 token = os.getenv("BENZINGA_API_KEY")
 if not token:
