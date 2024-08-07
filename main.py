@@ -1,26 +1,23 @@
 import os
-import requests
-import benzinga
 import sys
 import mysql.connector
+from benzinga import financial_data
 
-
+# Retrieve API key from environment variables
 token = os.getenv("BENZINGA_API_KEY")
 if not token:
     raise ValueError("No API key found in environment variables")
 
 mdp = os.getenv("MYSQL_MDP")
 if not mdp:
-    raise ValueError("No mdp  found in environment variables")
-
-from benzinga import financial_data
+    raise ValueError("No MySQL password found in environment variables")
 
 bz = financial_data.Benzinga(token)
 
+# List of Dow Jones tickers
 dj_tickers = [
-    'AAPL', 'MSFT', 'AMZN', 'JPM', 'WMT', 'UNH', 'V', 'PG', 'JNJ', 'HD', 'KO', 'MRK', 'CVX', 'CRM', 'MCD', 'CSCO', 'AMGN', 'IBM', 'VZ', 'AXP', 'DIS', 'CAT', 'GS', 'HON', 'NKE', 'BA', 'INTC', 'MMM', 'TRV', 'DOW'
+    'AAPL', 'MSFT', 'AMZN', 'JPM', 'WMT', 'UNH', 'V', 'PG', 'JNJ', 'HD', 'KO', 'MRK', 'CVX', 'CRM', 'MCD', 'CSCO', 'AMGN', 'IBM', 'VZ', 'AXP', 'DIS', 'CAT', 'GS', 'HON', 'NKE', 'BA', 'INTC', 'MMM', 'TRV', 'DOW' 
 ]
-
 
 # Database connection
 db_config = {
@@ -29,7 +26,6 @@ db_config = {
     'host': 'db-mysql-nyc3-03005-do-user-4526552-0.h.db.ondigitalocean.com',
     'database': 'defaultdb',
     'port': 25060
-
 }
 
 def insert_rating_data(rating_data):
@@ -62,10 +58,12 @@ def insert_rating_data(rating_data):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def fetch_and_store_ratings(tickers):
-    for ticker in tickers:
-        print(f"Fetching ratings for {ticker}")
-        rating = bz.ratings(company_tickers=ticker)
+def fetch_and_store_ratings(tickers, batch_size=10):
+    for i in range(0, len(tickers), batch_size):
+        batch = tickers[i:i + batch_size]
+        params = {'company_tickers': ','.join(batch)}
+        
+        rating = bz.ratings(**params)
         print(bz.output(rating))
         insert_rating_data(rating)
 
@@ -76,7 +74,6 @@ def main():
     except Exception as e:
         print(f"An error occurred: {e}")
         exit_program()
-
 
 def exit_program():
     print("Exiting the program...")
