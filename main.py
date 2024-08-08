@@ -2,6 +2,7 @@ import os
 import sys
 import mysql.connector
 from benzinga import financial_data
+from datetime import datetime
 
 # Retrieve API key from environment variables
 token = os.getenv("BENZINGA_API_KEY")
@@ -83,13 +84,14 @@ def fetch_and_store_prices(tickers, batch_size=50):
         try:
             quotes = bz.delayed_quote(**params)
             if quotes:
+                print(f"Fetched data for batch: {batch}")
                 print(bz.output(quotes))
                 price_data = []
                 for quote in quotes['results']:
                     price_data.append({
                         'ticker': quote['ticker'],
                         'date': quote['date'],
-                        'close': quote['close']
+                        'close': quote['price']
                     })
                 insert_price_data(price_data)
             else:
