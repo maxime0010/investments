@@ -87,11 +87,11 @@ def fetch_and_store_prices(tickers, batch_size=50):
                 print(f"Fetched data for batch: {batch}")
                 print(bz.output(quotes))
                 price_data = []
-                for quote in quotes['results']:
+                for quote in quotes['quotes']:
                     price_data.append({
-                        'ticker': quote['ticker'],
-                        'date': quote['date'],
-                        'close': quote['price']
+                        'ticker': quote['security']['symbol'],
+                        'date': quote['quote']['date'][:10],  # Extracting the date part from the datetime
+                        'close': quote['quote']['last']
                     })
                 insert_price_data(price_data)
             else:
