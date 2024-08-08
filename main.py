@@ -1,11 +1,16 @@
 import os
+import requests
 import mysql.connector
-from datetime import datetime, timedelta
 
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
 if not mdp:
     raise ValueError("No MySQL password found in environment variables")
+
+# Benzinga API token
+token = os.getenv("BENZINGA_API_KEY")
+if not token:
+    raise ValueError("No API token found in environment variables")
 
 # Database connection
 db_config = {
@@ -16,105 +21,98 @@ db_config = {
     'port': 25060
 }
 
-def calculate_price_target_statistics(cursor):
-    query = """
-        SELECT 
-            r.ticker,
-            AVG(r.adjusted_pt_current) AS average_price_target,
-            STDDEV(r.adjusted_pt_current) AS stddev_price_target,
-            COUNT(DISTINCT r.analyst_name) AS num_analysts,
-            MAX(r.date) AS last_update_date,
-            AVG(DATEDIFF(NOW(), r.date)) AS avg_days_since_last_update,
-            COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.analyst_name END) AS num_analysts_last_7_days,
-            STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.adjusted_pt_current END) AS stddev_price_target_last_7_days,
-            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.adjusted_pt_current END) AS average_price_target_last_7_days
-        FROM (
-            SELECT 
-                ticker,
-                analyst_name,
-                MAX(date) AS latest_date
-            FROM ratings
-            GROUP BY ticker, analyst_name
-        ) AS latest_ratings
-        JOIN ratings AS r 
-        ON latest_ratings.ticker = r.ticker 
-        AND latest_ratings.analyst_name = r.analyst_name 
-        AND latest_ratings.latest_date = r.date
-        GROUP BY r.ticker
-    """
-    cursor.execute(query)
-    return cursor.fetchall()
-
-def get_last_closing_price(cursor):
-    query = """
-        SELECT 
-            ticker,
-            close AS last_closing_price
-        FROM prices
-        WHERE (ticker, date) IN (
-            SELECT ticker, MAX(date) 
-            FROM prices 
-            GROUP BY ticker
-        )
-    """
-    cursor.execute(query)
-    return cursor.fetchall()
-
-def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
-    analysis_data = []
-    closing_price_dict = {price[0]: price[1] for price in closing_prices}
+def fetch_analysts_data():
+    url = "https://api.benzinga.com/api/v2.1/calendar/ratings/analysts"
+    querystring = {"token": token}
+    response = requests.get(url, params=querystring)
     
-    for stats in target_statistics:
-        ticker = stats[0]
-        average_price_target = stats[1]
-        stddev_price_target = stats[2]
-        num_analysts = stats[3]
-        last_update_date = stats[4]
-        avg_days_since_last_update = stats[5]
-        num_analysts_last_7_days = stats[6]
-        stddev_price_target_last_7_days = stats[7]
-        average_price_target_last_7_days = stats[8]
-        
-        last_closing_price = closing_price_dict.get(ticker)
-        
-        if last_closing_price is not None and average_price_target is not None:
-            expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
-            days_since_last_update = (datetime.now().date() - last_update_date).days
-            
-            expected_return_last_7_days = None
-            if average_price_target_last_7_days is not None:
-                expected_return_last_7_days = ((average_price_target_last_7_days - last_closing_price) / last_closing_price) * 100
-            
-            analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
-                                  num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
-                                  num_analysts_last_7_days, stddev_price_target_last_7_days, expected_return_last_7_days))
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Error fetching data: {response.status_code}")
+        return []
 
-    insert_query = """
-        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_analysts_last_7_days, stddev_price_target_last_7_days, expected_return_last_7_days)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE 
-            last_closing_price = VALUES(last_closing_price), 
-            average_price_target = VALUES(average_price_target), 
-            expected_return = VALUES(expected_return),
-            num_analysts = VALUES(num_analysts),
-            stddev_price_target = VALUES(stddev_price_target),
-            days_since_last_update = VALUES(days_since_last_update),
-            avg_days_since_last_update = VALUES(avg_days_since_last_update),
-            num_analysts_last_7_days = VALUES(num_analysts_last_7_days),
-            stddev_price_target_last_7_days = VALUES(stddev_price_target_last_7_days),
-            expected_return_last_7_days = VALUES(expected_return_last_7_days)
-    """
-    cursor.executemany(insert_query, analysis_data)
+def insert_analysts_data(cursor, analysts_data):
+    add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id, name_first, name_full, name_last, "
+                   "one_month_average_return, one_month_smart_score, one_month_stdev, one_month_success_rate, "
+                   "one_year_average_return, one_year_smart_score, one_year_stdev, one_year_success_rate, "
+                   "two_year_average_return, two_year_smart_score, two_year_stdev, two_year_success_rate, "
+                   "three_month_average_return, three_month_smart_score, three_month_stdev, three_month_success_rate, "
+                   "three_year_average_return, three_year_smart_score, three_year_stdev, three_year_success_rate, "
+                   "nine_month_average_return, nine_month_smart_score, nine_month_stdev, nine_month_success_rate, "
+                   "overall_average_return, overall_avg_return_percentile, overall_stdev, overall_success_rate, "
+                   "smart_score, total_ratings_percentile, updated) "
+                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "
+                   "%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                   "ON DUPLICATE KEY UPDATE "
+                   "firm_id = VALUES(firm_id), firm_name = VALUES(firm_name), name_first = VALUES(name_first), "
+                   "name_full = VALUES(name_full), name_last = VALUES(name_last), "
+                   "one_month_average_return = VALUES(one_month_average_return), one_month_smart_score = VALUES(one_month_smart_score), "
+                   "one_month_stdev = VALUES(one_month_stdev), one_month_success_rate = VALUES(one_month_success_rate), "
+                   "one_year_average_return = VALUES(one_year_average_return), one_year_smart_score = VALUES(one_year_smart_score), "
+                   "one_year_stdev = VALUES(one_year_stdev), one_year_success_rate = VALUES(one_year_success_rate), "
+                   "two_year_average_return = VALUES(two_year_average_return), two_year_smart_score = VALUES(two_year_smart_score), "
+                   "two_year_stdev = VALUES(two_year_stdev), two_year_success_rate = VALUES(two_year_success_rate), "
+                   "three_month_average_return = VALUES(three_month_average_return), three_month_smart_score = VALUES(three_month_smart_score), "
+                   "three_month_stdev = VALUES(three_month_stdev), three_month_success_rate = VALUES(three_month_success_rate), "
+                   "three_year_average_return = VALUES(three_year_average_return), three_year_smart_score = VALUES(three_year_smart_score), "
+                   "three_year_stdev = VALUES(three_year_stdev), three_year_success_rate = VALUES(three_year_success_rate), "
+                   "nine_month_average_return = VALUES(nine_month_average_return), nine_month_smart_score = VALUES(nine_month_smart_score), "
+                   "nine_month_stdev = VALUES(nine_month_stdev), nine_month_success_rate = VALUES(nine_month_success_rate), "
+                   "overall_average_return = VALUES(overall_average_return), overall_avg_return_percentile = VALUES(overall_avg_return_percentile), "
+                   "overall_stdev = VALUES(overall_stdev), overall_success_rate = VALUES(overall_success_rate), "
+                   "smart_score = VALUES(smart_score), total_ratings_percentile = VALUES(total_ratings_percentile), updated = VALUES(updated)")
+    
+    for analyst in analysts_data.get('analyst_ratings_analyst', []):
+        ratings_accuracy = analyst.get('ratings_accuracy', {})
+        cursor.execute(add_analyst, (
+            analyst.get('firm_id'),
+            analyst.get('firm_name'),
+            analyst.get('id'),
+            analyst.get('name_first'),
+            analyst.get('name_full'),
+            analyst.get('name_last'),
+            float(ratings_accuracy.get('1m_average_return', 0)),
+            float(ratings_accuracy.get('1m_smart_score', 0)),
+            float(ratings_accuracy.get('1m_stdev', 0)),
+            float(ratings_accuracy.get('1m_success_rate', 0)),
+            float(ratings_accuracy.get('1y_average_return', 0)),
+            float(ratings_accuracy.get('1y_smart_score', 0)),
+            float(ratings_accuracy.get('1y_stdev', 0)),
+            float(ratings_accuracy.get('1y_success_rate', 0)),
+            float(ratings_accuracy.get('2y_average_return', 0)),
+            float(ratings_accuracy.get('2y_smart_score', 0)),
+            float(ratings_accuracy.get('2y_stdev', 0)),
+            float(ratings_accuracy.get('2y_success_rate', 0)),
+            float(ratings_accuracy.get('3m_average_return', 0)),
+            float(ratings_accuracy.get('3m_smart_score', 0)),
+            float(ratings_accuracy.get('3m_stdev', 0)),
+            float(ratings_accuracy.get('3m_success_rate', 0)),
+            float(ratings_accuracy.get('3y_average_return', 0)),
+            float(ratings_accuracy.get('3y_smart_score', 0)),
+            float(ratings_accuracy.get('3y_stdev', 0)),
+            float(ratings_accuracy.get('3y_success_rate', 0)),
+            float(ratings_accuracy.get('9m_average_return', 0)),
+            float(ratings_accuracy.get('9m_smart_score', 0)),
+            float(ratings_accuracy.get('9m_stdev', 0)),
+            float(ratings_accuracy.get('9m_success_rate', 0)),
+            float(ratings_accuracy.get('overall_average_return', 0)),
+            float(ratings_accuracy.get('overall_avg_return_percentile', 0)),
+            float(ratings_accuracy.get('overall_stdev', 0)),
+            float(ratings_accuracy.get('overall_success_rate', 0)),
+            float(ratings_accuracy.get('smart_score', 0)),
+            float(ratings_accuracy.get('total_ratings_percentile', 0)),
+            analyst.get('updated')
+        ))
 
 def main():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
-        target_statistics = calculate_price_target_statistics(cursor)
-        closing_prices = get_last_closing_price(cursor)
-
-        calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
+        analysts_data = fetch_analysts_data()
+        if analysts_data:
+            insert_analysts_data(cursor, analysts_data)
 
         conn.commit()
         cursor.close()
