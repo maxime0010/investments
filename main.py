@@ -1,51 +1,10 @@
 import os
-import sys
 import mysql.connector
-from benzinga import financial_data
 
-# Retrieve API key from environment variables
-token = os.getenv("BENZINGA_API_KEY")
-if not token:
-    raise ValueError("No API key found in environment variables")
-
+# Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
 if not mdp:
     raise ValueError("No MySQL password found in environment variables")
-
-bz = financial_data.Benzinga(token)
-
-# List of S&P 500 tickers
-sp500_tickers = [
-    'MMM', 'AOS', 'ABT', 'ABBV', 'ACN', 'ADBE', 'AMD', 'AES', 'AFL', 'A', 'APD', 'ABNB', 'AKAM', 'ALB', 'ARE', 'ALGN', 'ALLE', 
-    'LNT', 'ALL', 'GOOGL', 'GOOG', 'MO', 'AMZN', 'AMCR', 'AEE', 'AAL', 'AEP', 'AXP', 'AIG', 'AMT', 'AWK', 'AMP', 'AME', 'AMGN', 
-    'APH', 'ADI', 'ANSS', 'AON', 'APA', 'AAPL', 'AMAT', 'APTV', 'ACGL', 'ADM', 'ANET', 'AJG', 'AIZ', 'T', 'ATO', 'ADSK', 'ADP', 
-    'AZO', 'AVB', 'AVY', 'AXON', 'BKR', 'BALL', 'BAC', 'BK', 'BBWI', 'BAX', 'BDX', 'BRK.B', 'BBY', 'BIO', 'TECH', 'BIIB', 'BLK', 
-    'BX', 'BA', 'BKNG', 'BWA', 'BSX', 'BMY', 'AVGO', 'BR', 'BRO', 'BF.B', 'BLDR', 'BG', 'BXP', 'CDNS', 'CZR', 'CPT', 'CPB', 'COF', 
-    'CAH', 'KMX', 'CCL', 'CARR', 'CTLT', 'CAT', 'CBOE', 'CBRE', 'CDW', 'CE', 'COR', 'CNC', 'CNP', 'CF', 'CHRW', 'CRL', 'SCHW', 
-    'CHTR', 'CVX', 'CMG', 'CB', 'CHD', 'CI', 'CINF', 'CTAS', 'CSCO', 'C', 'CFG', 'CLX', 'CME', 'CMS', 'KO', 'CTSH', 'CL', 'CMCSA', 
-    'CAG', 'COP', 'ED', 'STZ', 'CEG', 'COO', 'CPRT', 'GLW', 'CPAY', 'CTVA', 'CSGP', 'COST', 'CTRA', 'CRWD', 'CCI', 'CSX', 'CMI', 
-    'CVS', 'DHR', 'DRI', 'DVA', 'DAY', 'DECK', 'DE', 'DAL', 'DVN', 'DXCM', 'FANG', 'DLR', 'DFS', 'DG', 'DLTR', 'D', 'DPZ', 'DOV', 
-    'DOW', 'DHI', 'DTE', 'DUK', 'DD', 'EMN', 'ETN', 'EBAY', 'ECL', 'EIX', 'EW', 'EA', 'ELV', 'EMR', 'ENPH', 'ETR', 'EOG', 'EPAM', 
-    'EQT', 'EFX', 'EQIX', 'EQR', 'ESS', 'EL', 'ETSY', 'EG', 'EVRG', 'ES', 'EXC', 'EXPE', 'EXPD', 'EXR', 'XOM', 'FFIV', 'FDS', 
-    'FICO', 'FAST', 'FRT', 'FDX', 'FIS', 'FITB', 'FSLR', 'FE', 'FI', 'FMC', 'F', 'FTNT', 'FTV', 'FOXA', 'FOX', 'BEN', 'FCX', 'GRMN', 
-    'IT', 'GE', 'GEHC', 'GEV', 'GEN', 'GNRC', 'GD', 'GIS', 'GM', 'GPC', 'GILD', 'GPN', 'GL', 'GDDY', 'GS', 'HAL', 'HIG', 'HAS', 
-    'HCA', 'DOC', 'HSIC', 'HSY', 'HES', 'HPE', 'HLT', 'HOLX', 'HD', 'HON', 'HRL', 'HST', 'HWM', 'HPQ', 'HUBB', 'HUM', 'HBAN', 
-    'HII', 'IBM', 'IEX', 'IDXX', 'ITW', 'INCY', 'IR', 'PODD', 'INTC', 'ICE', 'IFF', 'IP', 'IPG', 'INTU', 'ISRG', 'IVZ', 'INVH', 
-    'IQV', 'IRM', 'JBHT', 'JBL', 'JKHY', 'J', 'JNJ', 'JCI', 'JPM', 'JNPR', 'K', 'KVUE', 'KDP', 'KEY', 'KEYS', 'KMB', 'KIM', 'KMI', 
-    'KKR', 'KLAC', 'KHC', 'KR', 'LHX', 'LH', 'LRCX', 'LW', 'LVS', 'LDOS', 'LEN', 'LLY', 'LIN', 'LYV', 'LKQ', 'LMT', 'L', 'LOW', 
-    'LULU', 'LYB', 'MTB', 'MRO', 'MPC', 'MKTX', 'MAR', 'MMC', 'MLM', 'MAS', 'MA', 'MTCH', 'MKC', 'MCD', 'MCK', 'MDT', 'MRK', 
-    'META', 'MET', 'MTD', 'MGM', 'MCHP', 'MU', 'MSFT', 'MAA', 'MRNA', 'MHK', 'MOH', 'TAP', 'MDLZ', 'MPWR', 'MNST', 'MCO', 'MS', 
-    'MOS', 'MSI', 'MSCI', 'NDAQ', 'NTAP', 'NFLX', 'NEM', 'NWSA', 'NWS', 'NEE', 'NKE', 'NI', 'NDSN', 'NSC', 'NTRS', 'NOC', 'NCLH', 
-    'NRG', 'NUE', 'NVDA', 'NVR', 'NXPI', 'ORLY', 'OXY', 'ODFL', 'OMC', 'ON', 'OKE', 'ORCL', 'OTIS', 'PCAR', 'PKG', 'PANW', 'PARA', 
-    'PH', 'PAYX', 'PAYC', 'PYPL', 'PNR', 'PEP', 'PFE', 'PCG', 'PM', 'PSX', 'PNW', 'PNC', 'POOL', 'PPG', 'PPL', 'PFG', 'PG', 'PGR', 
-    'PLD', 'PRU', 'PEG', 'PTC', 'PSA', 'PHM', 'QRVO', 'PWR', 'QCOM', 'DGX', 'RL', 'RJF', 'RTX', 'O', 'REG', 'REGN', 'RF', 'RSG', 
-    'RMD', 'RVTY', 'ROK', 'ROL', 'ROP', 'ROST', 'RCL', 'SPGI', 'CRM', 'SBAC', 'SLB', 'STX', 'SRE', 'NOW', 'SHW', 'SPG', 'SWKS', 
-    'SJM', 'SW', 'SNA', 'SOLV', 'SO', 'LUV', 'SWK', 'SBUX', 'STT', 'STLD', 'STE', 'SYK', 'SMCI', 'SYF', 'SNPS', 'SYY', 'TMUS', 
-    'TROW', 'TTWO', 'TPR', 'TRGP', 'TGT', 'TEL', 'TDY', 'TFX', 'TER', 'TSLA', 'TXN', 'TXT', 'TMO', 'TJX', 'TSCO', 'TT', 'TDG', 
-    'TRV', 'TRMB', 'TFC', 'TYL', 'TSN', 'USB', 'UBER', 'UDR', 'ULTA', 'UNP', 'UAL', 'UPS', 'URI', 'UNH', 'UHS', 'VLO', 'VTR', 
-    'VLTO', 'VRSN', 'VRSK', 'VZ', 'VRTX', 'VTRS', 'VICI', 'V', 'VST', 'VMC', 'WRB', 'GWW', 'WAB', 'WBA', 'WMT', 'DIS', 'WBD', 
-    'WM', 'WAT', 'WEC', 'WFC', 'WELL', 'WST', 'WDC', 'WY', 'WMB', 'WTW', 'WYNN', 'XEL', 'XYL', 'YUM', 'ZBRA', 'ZBH', 'ZTS'
-]
 
 # Database connection
 db_config = {
@@ -56,17 +15,75 @@ db_config = {
     'port': 25060
 }
 
-def insert_price_data(price_data):
+def calculate_average_price_target(cursor):
+    query = """
+        SELECT 
+            r.ticker,
+            AVG(r.adjusted_pt_current) AS average_price_target
+        FROM (
+            SELECT 
+                ticker,
+                analyst_name,
+                MAX(date) AS latest_date
+            FROM ratings
+            GROUP BY ticker, analyst_name
+        ) AS latest_ratings
+        JOIN ratings AS r 
+        ON latest_ratings.ticker = r.ticker 
+        AND latest_ratings.analyst_name = r.analyst_name 
+        AND latest_ratings.latest_date = r.date
+        GROUP BY r.ticker
+    """
+    cursor.execute(query)
+    return cursor.fetchall()
+
+def get_last_closing_price(cursor):
+    query = """
+        SELECT 
+            ticker,
+            close AS last_closing_price
+        FROM prices
+        WHERE (ticker, date) IN (
+            SELECT ticker, MAX(date) 
+            FROM prices 
+            GROUP BY ticker
+        )
+    """
+    cursor.execute(query)
+    return cursor.fetchall()
+
+def calculate_expected_return_and_insert(cursor, average_targets, closing_prices):
+    analysis_data = []
+    closing_price_dict = {price[0]: price[1] for price in closing_prices}
+    
+    for target in average_targets:
+        ticker = target[0]
+        average_price_target = target[1]
+        last_closing_price = closing_price_dict.get(ticker)
+        if last_closing_price:
+            expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
+            analysis_data.append((ticker, last_closing_price, average_price_target, expected_return))
+
+    insert_query = """
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE 
+            last_closing_price = VALUES(last_closing_price), 
+            average_price_target = VALUES(average_price_target), 
+            expected_return = VALUES(expected_return)
+    """
+    cursor.executemany(insert_query, analysis_data)
+
+def main():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        add_price = ("INSERT INTO prices (ticker, date, close) "
-                     "VALUES (%(ticker)s, %(date)s, %(close)s) "
-                     "ON DUPLICATE KEY UPDATE close = VALUES(close)")
 
-        for price in price_data:
-            cursor.execute(add_price, price)
-        
+        average_targets = calculate_average_price_target(cursor)
+        closing_prices = get_last_closing_price(cursor)
+
+        calculate_expected_return_and_insert(cursor, average_targets, closing_prices)
+
         conn.commit()
         cursor.close()
         conn.close()
@@ -75,40 +92,5 @@ def insert_price_data(price_data):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def fetch_and_store_prices(tickers, batch_size=50):
-    for i in range(0, len(tickers), batch_size):
-        batch = tickers[i:i + batch_size]
-        params = {'company_tickers': ','.join(batch)}
-        
-        try:
-            quotes = bz.delayed_quote(**params)
-            if quotes:
-                print(f"Fetched data for batch: {batch}")
-                print(bz.output(quotes))
-                price_data = []
-                for quote in quotes['quotes']:
-                    price_data.append({
-                        'ticker': quote['security']['symbol'],
-                        'date': quote['quote']['date'][:10],  # Extracting the date part from the datetime
-                        'close': quote['quote']['last']
-                    })
-                insert_price_data(price_data)
-            else:
-                print(f"No data returned for batch: {batch}")
-        except Exception as e:
-            print(f"Error fetching prices for batch {batch}: {e}")
-
-def stock_price():
-    try:
-        fetch_and_store_prices(sp500_tickers)
-        exit_program()
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        exit_program()
-
-def exit_program():
-    print("Exiting the program...")
-    sys.exit(0)
-
 if __name__ == "__main__":
-    stock_price()
+    main()
