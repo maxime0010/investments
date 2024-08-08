@@ -111,9 +111,15 @@ def fetch_and_store_ratings(tickers, batch_size=50):
         batch = tickers[i:i + batch_size]
         params = {'company_tickers': ','.join(batch)}
         
-        rating = bz.ratings(**params)
-        print(bz.output(rating))
-        insert_rating_data(rating)
+        try:
+            rating = bz.ratings(**params)
+            if rating:
+                print(bz.output(rating))
+                insert_rating_data(rating)
+            else:
+                print(f"No data returned for batch: {batch}")
+        except Exception as e:
+            print(f"Error fetching ratings for batch {batch}: {e}")
 
 def fetch_and_store_prices(tickers, batch_size=50):
     date_to = datetime.now().strftime('%Y-%m-%d')
@@ -128,9 +134,23 @@ def fetch_and_store_prices(tickers, batch_size=50):
             'interval': '1D'
         }
         
-        bars = bz.bars(**params)
-        print(bz.output(bars))
-        insert_price_data(price_data)
+        try:
+            bars = bz.bars(**params)
+            if bars:
+                print(bz.output(bars))
+                price_data = []
+                for bar in bars['results']:
+                    for data in bar['data']:
+                        price_data.append({
+                            'ticker': bar['ticker'],
+                            'date': data['time'][:10],  # Extracting the date part from the datetime
+                            'close': data['close']
+                        })
+                insert_price_data(price_data)
+            else:
+                print(f"No data returned for batch: {batch}")
+        except Exception as e:
+            print(f"Error fetching prices for batch {batch}: {e}")
 
 def main():
     try:
