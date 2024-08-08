@@ -60,7 +60,7 @@ def calculate_expected_return_and_insert(cursor, average_targets, closing_prices
         ticker = target[0]
         average_price_target = target[1]
         last_closing_price = closing_price_dict.get(ticker)
-        if last_closing_price:
+        if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return))
 
