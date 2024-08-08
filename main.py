@@ -2,7 +2,7 @@ import os
 import sys
 import mysql.connector
 from benzinga import financial_data
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Retrieve API key from environment variables
 token = os.getenv("BENZINGA_API_KEY")
@@ -77,11 +77,15 @@ def insert_price_data(price_data):
         print(f"An unexpected error occurred: {e}")
 
 def fetch_and_store_prices(tickers, batch_size=50):
+    date_to = datetime.now().strftime('%Y-%m-%d')
+    date_from = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         params = {
             'company_tickers': ','.join(batch),
-            'date_from': '1d',
+            'date_from': date_from,
+            'date_to': date_to,
             'interval': '1D'
         }
         
@@ -91,11 +95,12 @@ def fetch_and_store_prices(tickers, batch_size=50):
                 print(bz.output(bars))
                 price_data = []
                 for bar in bars['results']:
-                    price_data.append({
-                        'ticker': bar['ticker'],
-                        'date': bar['data'][-1]['time'][:10],  # Extracting the date part from the last datetime entry
-                        'close': bar['data'][-1]['close']  # Getting the closing price from the last entry
-                    })
+                    for data in bar['data']:
+                        price_data.append({
+                            'ticker': bar['ticker'],
+                            'date': data['time'][:10],  # Extracting the date part from the datetime
+                            'close': data['close']
+                        })
                 insert_price_data(price_data)
             else:
                 print(f"No data returned for batch: {batch}")
