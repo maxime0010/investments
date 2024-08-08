@@ -1,6 +1,6 @@
 import os
 import mysql.connector
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
@@ -24,7 +24,10 @@ def calculate_price_target_statistics(cursor):
             STDDEV(r.adjusted_pt_current) AS stddev_price_target,
             COUNT(DISTINCT r.analyst_name) AS num_analysts,
             MAX(r.date) AS last_update_date,
-            AVG(DATEDIFF(NOW(), r.date)) AS avg_days_since_last_update
+            AVG(DATEDIFF(NOW(), r.date)) AS avg_days_since_last_update,
+            COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.analyst_name END) AS num_analysts_last_7_days,
+            STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.adjusted_pt_current END) AS stddev_price_target_last_7_days,
+            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.adjusted_pt_current END) AS average_price_target_last_7_days
         FROM (
             SELECT 
                 ticker,
@@ -68,18 +71,27 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
         num_analysts = stats[3]
         last_update_date = stats[4]
         avg_days_since_last_update = stats[5]
+        num_analysts_last_7_days = stats[6]
+        stddev_price_target_last_7_days = stats[7]
+        average_price_target_last_7_days = stats[8]
+        
         last_closing_price = closing_price_dict.get(ticker)
         
         if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
             days_since_last_update = (datetime.now().date() - last_update_date).days
             
+            expected_return_last_7_days = None
+            if average_price_target_last_7_days is not None:
+                expected_return_last_7_days = ((average_price_target_last_7_days - last_closing_price) / last_closing_price) * 100
+            
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
-                                  num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update))
+                                  num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
+                                  num_analysts_last_7_days, stddev_price_target_last_7_days, expected_return_last_7_days))
 
     insert_query = """
-        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_analysts_last_7_days, stddev_price_target_last_7_days, expected_return_last_7_days)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE 
             last_closing_price = VALUES(last_closing_price), 
             average_price_target = VALUES(average_price_target), 
@@ -87,7 +99,10 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             num_analysts = VALUES(num_analysts),
             stddev_price_target = VALUES(stddev_price_target),
             days_since_last_update = VALUES(days_since_last_update),
-            avg_days_since_last_update = VALUES(avg_days_since_last_update)
+            avg_days_since_last_update = VALUES(avg_days_since_last_update),
+            num_analysts_last_7_days = VALUES(num_analysts_last_7_days),
+            stddev_price_target_last_7_days = VALUES(stddev_price_target_last_7_days),
+            expected_return_last_7_days = VALUES(expected_return_last_7_days)
     """
     cursor.executemany(insert_query, analysis_data)
 
