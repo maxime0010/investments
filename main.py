@@ -1,5 +1,6 @@
 import os
 import mysql.connector
+from datetime import datetime
 
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
@@ -15,11 +16,15 @@ db_config = {
     'port': 25060
 }
 
-def calculate_average_price_target(cursor):
+def calculate_price_target_statistics(cursor):
     query = """
         SELECT 
             r.ticker,
-            AVG(r.adjusted_pt_current) AS average_price_target
+            AVG(r.adjusted_pt_current) AS average_price_target,
+            STDDEV(r.adjusted_pt_current) AS stddev_price_target,
+            COUNT(DISTINCT r.analyst_name) AS num_analysts,
+            MAX(r.date) AS last_update_date,
+            AVG(DATEDIFF(NOW(), r.date)) AS avg_days_since_last_update
         FROM (
             SELECT 
                 ticker,
@@ -52,25 +57,37 @@ def get_last_closing_price(cursor):
     cursor.execute(query)
     return cursor.fetchall()
 
-def calculate_expected_return_and_insert(cursor, average_targets, closing_prices):
+def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     analysis_data = []
     closing_price_dict = {price[0]: price[1] for price in closing_prices}
     
-    for target in average_targets:
-        ticker = target[0]
-        average_price_target = target[1]
+    for stats in target_statistics:
+        ticker = stats[0]
+        average_price_target = stats[1]
+        stddev_price_target = stats[2]
+        num_analysts = stats[3]
+        last_update_date = stats[4]
+        avg_days_since_last_update = stats[5]
         last_closing_price = closing_price_dict.get(ticker)
+        
         if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
-            analysis_data.append((ticker, last_closing_price, average_price_target, expected_return))
+            days_since_last_update = (datetime.now().date() - last_update_date).days
+            
+            analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
+                                  num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update))
 
     insert_query = """
-        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE 
             last_closing_price = VALUES(last_closing_price), 
             average_price_target = VALUES(average_price_target), 
-            expected_return = VALUES(expected_return)
+            expected_return = VALUES(expected_return),
+            num_analysts = VALUES(num_analysts),
+            stddev_price_target = VALUES(stddev_price_target),
+            days_since_last_update = VALUES(days_since_last_update),
+            avg_days_since_last_update = VALUES(avg_days_since_last_update)
     """
     cursor.executemany(insert_query, analysis_data)
 
@@ -79,10 +96,10 @@ def main():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
-        average_targets = calculate_average_price_target(cursor)
+        target_statistics = calculate_price_target_statistics(cursor)
         closing_prices = get_last_closing_price(cursor)
 
-        calculate_expected_return_and_insert(cursor, average_targets, closing_prices)
+        calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
 
         conn.commit()
         cursor.close()
