@@ -2,7 +2,6 @@ import os
 import sys
 import mysql.connector
 from benzinga import financial_data
-from datetime import datetime, timedelta
 
 # Retrieve API key from environment variables
 token = os.getenv("BENZINGA_API_KEY")
@@ -87,75 +86,18 @@ def insert_rating_data(rating_data):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def insert_price_data(price_data):
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        add_price = ("INSERT INTO prices "
-                     "(ticker, date, close) "
-                     "VALUES (%(ticker)s, %(date)s, %(close)s)")
-
-        for price in price_data:
-            cursor.execute(add_price, price)
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
 def fetch_and_store_ratings(tickers, batch_size=50):
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         params = {'company_tickers': ','.join(batch)}
         
-        try:
-            rating = bz.ratings(**params)
-            if rating:
-                print(bz.output(rating))
-                insert_rating_data(rating)
-            else:
-                print(f"No data returned for batch: {batch}")
-        except Exception as e:
-            print(f"Error fetching ratings for batch {batch}: {e}")
-
-def fetch_and_store_prices(tickers, batch_size=50):
-    date_to = datetime.now().strftime('%Y-%m-%d')
-    date_from = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
-    
-    for i in range(0, len(tickers), batch_size):
-        batch = tickers[i:i + batch_size]
-        params = {
-            'company_tickers': ','.join(batch),
-            'date_from': date_from,
-            'date_to': date_to,
-            'interval': '1D'
-        }
-        
-        try:
-            bars = bz.bars(**params)
-            if bars:
-                print(bz.output(bars))
-                price_data = []
-                for bar in bars['results']:
-                    for data in bar['data']:
-                        price_data.append({
-                            'ticker': bar['ticker'],
-                            'date': data['time'][:10],  # Extracting the date part from the datetime
-                            'close': data['close']
-                        })
-                insert_price_data(price_data)
-            else:
-                print(f"No data returned for batch: {batch}")
-        except Exception as e:
-            print(f"Error fetching prices for batch {batch}: {e}")
+        rating = bz.ratings(**params)
+        print(bz.output(rating))
+        insert_rating_data(rating)
 
 def main():
     try:
         fetch_and_store_ratings(sp500_tickers)
-        fetch_and_store_prices(sp500_tickers)
         exit_program()
     except Exception as e:
         print(f"An error occurred: {e}")
