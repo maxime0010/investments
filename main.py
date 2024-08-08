@@ -2,7 +2,6 @@ import os
 import sys
 import mysql.connector
 from benzinga import financial_data
-from datetime import datetime
 
 # Retrieve API key from environment variables
 token = os.getenv("BENZINGA_API_KEY")
@@ -61,9 +60,9 @@ def insert_price_data(price_data):
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        add_price = ("INSERT INTO prices "
-                     "(ticker, date, close) "
-                     "VALUES (%(ticker)s, %(date)s, %(close)s)")
+        add_price = ("INSERT INTO prices (ticker, date, close) "
+                     "VALUES (%(ticker)s, %(date)s, %(close)s) "
+                     "ON DUPLICATE KEY UPDATE close = VALUES(close)")
 
         for price in price_data:
             cursor.execute(add_price, price)
