@@ -130,14 +130,6 @@ def fetch_and_store_prices(tickers, batch_size=50):
         
         bars = bz.bars(**params)
         print(bz.output(bars))
-        price_data = []
-        for bar in bars['results']:
-            for data in bar['data']:
-                price_data.append({
-                    'ticker': bar['ticker'],
-                    'date': data['time'][:10],  # Extracting the date part from the datetime
-                    'close': data['close']
-                })
         insert_price_data(price_data)
 
 def main():
