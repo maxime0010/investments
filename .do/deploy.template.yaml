@@ -5,6 +5,7 @@ services:
       PYTHON_VERSION: "3.10"
     build_command: "pip install -r requirements.txt"
     run_command: "python main.py"
+    run_command: "python stock_price.py"
     github:
       repo: maxime0010/investments
       branch: main
