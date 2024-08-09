@@ -32,17 +32,38 @@ def fetch_analysts_data():
         print(f"Error fetching data: {response.status_code}")
         return []
 
+def clean_data(value, default=''):
+    return value.strip() if value else default
+
 def insert_analysts_data(cursor, analysts_data):
-    add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id) "
-                   "VALUES (%s, %s, %s) "
+    add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id, name_first, name_full, name_last, "
+                   "one_month_average_return, one_year_success_rate, two_year_success_rate, overall_success_rate, smart_score) "
+                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                    "ON DUPLICATE KEY UPDATE "
-                   "firm_name = VALUES(firm_name)")
+                   "firm_name = VALUES(firm_name), "
+                   "name_first = VALUES(name_first), "
+                   "name_full = VALUES(name_full), "
+                   "name_last = VALUES(name_last), "
+                   "one_month_average_return = VALUES(one_month_average_return), "
+                   "one_year_success_rate = VALUES(one_year_success_rate), "
+                   "two_year_success_rate = VALUES(two_year_success_rate), "
+                   "overall_success_rate = VALUES(overall_success_rate), "
+                   "smart_score = VALUES(smart_score)")
 
     for analyst in analysts_data.get('analyst_ratings_analyst', []):
+        ratings_accuracy = analyst.get('ratings_accuracy', {})
         data_tuple = (
-            analyst.get('firm_id'),
-            analyst.get('firm_name'),
-            analyst.get('id')
+            clean_data(analyst.get('firm_id')),
+            clean_data(analyst.get('firm_name')),
+            clean_data(analyst.get('id')),
+            clean_data(analyst.get('name_first')),
+            clean_data(analyst.get('name_full')),
+            clean_data(analyst.get('name_last')),
+            float(ratings_accuracy.get('1m_average_return', 0)),
+            float(ratings_accuracy.get('1y_success_rate', 0)),
+            float(ratings_accuracy.get('2y_success_rate', 0)),
+            float(ratings_accuracy.get('overall_success_rate', 0)),
+            float(ratings_accuracy.get('smart_score', 0))
         )
         
         try:
