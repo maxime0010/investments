@@ -33,15 +33,16 @@ def fetch_analysts_data():
         return []
 
 def insert_analysts_data(cursor, analysts_data):
-    add_analyst = ("INSERT INTO analysts (firm_id, firm_name) "
-                   "VALUES (%s, %s) "
+    add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id) "
+                   "VALUES (%s, %s, %s) "
                    "ON DUPLICATE KEY UPDATE "
                    "firm_name = VALUES(firm_name)")
 
     for analyst in analysts_data.get('analyst_ratings_analyst', []):
         data_tuple = (
             analyst.get('firm_id'),
-            analyst.get('firm_name')
+            analyst.get('firm_name'),
+            analyst.get('id')
         )
         
         try:
