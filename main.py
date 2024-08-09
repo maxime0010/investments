@@ -32,6 +32,9 @@ def fetch_analysts_data():
         print(f"Error fetching data: {response.status_code}")
         return []
 
+def clean_data(value, default=''):
+    return value.strip() if value else default
+
 def insert_analysts_data(cursor, analysts_data):
     add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id, name_first, name_full, name_last, "
                    "one_month_average_return, one_month_smart_score, one_month_stdev, one_month_success_rate, "
@@ -66,12 +69,12 @@ def insert_analysts_data(cursor, analysts_data):
     for analyst in analysts_data.get('analyst_ratings_analyst', []):
         ratings_accuracy = analyst.get('ratings_accuracy', {})
         data_tuple = (
-            analyst.get('firm_id'),
-            analyst.get('firm_name'),
-            analyst.get('id'),
-            analyst.get('name_first'),
-            analyst.get('name_full'),
-            analyst.get('name_last'),
+            clean_data(analyst.get('firm_id')),
+            clean_data(analyst.get('firm_name')),
+            clean_data(analyst.get('id')),
+            clean_data(analyst.get('name_first')),
+            clean_data(analyst.get('name_full')),
+            clean_data(analyst.get('name_last')),
             float(ratings_accuracy.get('1m_average_return', 0)),
             float(ratings_accuracy.get('1m_smart_score', 0)),
             float(ratings_accuracy.get('1m_stdev', 0)),
