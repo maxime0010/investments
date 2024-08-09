@@ -21,9 +21,9 @@ db_config = {
     'port': 25060
 }
 
-def fetch_analysts_data():
+def fetch_analysts_data(offset=0, limit=50):
     url = "https://api.benzinga.com/api/v2.1/calendar/ratings/analysts"
-    querystring = {"token": token}
+    querystring = {"token": token, "offset": offset, "limit": limit}
     response = requests.get(url, params=querystring)
     
     if response.status_code == 200:
@@ -79,9 +79,10 @@ def main():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
-        analysts_data = fetch_analysts_data()
-        if analysts_data:
-            insert_analysts_data(cursor, analysts_data)
+        for offset in range(0, 100, 50):  # Fetch in two batches of 50
+            analysts_data = fetch_analysts_data(offset=offset, limit=50)
+            if analysts_data:
+                insert_analysts_data(cursor, analysts_data)
 
         conn.commit()
         cursor.close()
