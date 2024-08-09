@@ -112,12 +112,14 @@ def insert_analysts_data(cursor, analysts_data):
             analyst.get('updated')
         )
         
+        print(f"Inserting data tuple: {data_tuple}")  # Print data tuple before inserting
+
         try:
             cursor.execute(add_analyst, data_tuple)
         except mysql.connector.Error as err:
             print(f"Error: {err}")
-            print(f"Data tuple: {data_tuple}")
             print(f"SQL Query: {cursor.statement}")
+            print(f"Data tuple: {data_tuple}")
 
 def main():
     try:
