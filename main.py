@@ -33,7 +33,11 @@ def fetch_analysts_data():
         return []
 
 def clean_data(value, default=''):
-    return value.strip() if value else default
+    try:
+        return value.strip() if value else default
+    except AttributeError as e:
+        print(f"Error cleaning data: {e}")
+        return default
 
 def insert_analysts_data(cursor, analysts_data):
     add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id, name_first, name_full, name_last, "
