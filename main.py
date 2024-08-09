@@ -62,7 +62,7 @@ def insert_analysts_data(cursor, analysts_data):
                    "overall_average_return = VALUES(overall_average_return), overall_avg_return_percentile = VALUES(overall_avg_return_percentile), "
                    "overall_stdev = VALUES(overall_stdev), overall_success_rate = VALUES(overall_success_rate), "
                    "smart_score = VALUES(smart_score), total_ratings_percentile = VALUES(total_ratings_percentile), updated = VALUES(updated)")
-    
+
     for analyst in analysts_data.get('analyst_ratings_analyst', []):
         ratings_accuracy = analyst.get('ratings_accuracy', {})
         data_tuple = (
@@ -109,8 +109,8 @@ def insert_analysts_data(cursor, analysts_data):
             cursor.execute(add_analyst, data_tuple)
         except mysql.connector.Error as err:
             print(f"Error: {err}")
-            print(f"SQL Query: {cursor.statement}")
             print(f"Data tuple: {data_tuple}")
+            print(f"SQL Query: {cursor.statement}")
 
 def main():
     try:
