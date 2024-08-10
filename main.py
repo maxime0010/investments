@@ -16,26 +16,6 @@ db_config = {
     'port': 25060
 }
 
-def update_table(cursor):
-    alter_table_query = """
-        ALTER TABLE analysis
-        ADD COLUMN num_high_success_analysts INT,
-        ADD COLUMN stddev_high_success_analysts FLOAT,
-        ADD COLUMN avg_high_success_analysts FLOAT,
-        ADD COLUMN expected_return_high_success FLOAT,
-        ADD COLUMN num_combined_criteria INT,
-        ADD COLUMN stddev_combined_criteria FLOAT,
-        ADD COLUMN avg_combined_criteria FLOAT,
-        ADD COLUMN expected_return_combined_criteria FLOAT;
-    """
-    try:
-        cursor.execute(alter_table_query)
-    except mysql.connector.Error as err:
-        if err.errno == mysql.connector.errorcode.ER_DUP_FIELDNAME:
-            print("Columns already exist.")
-        else:
-            print(f"Error: {err}")
-
 def calculate_price_target_statistics(cursor):
     query = """
         SELECT 
@@ -162,9 +142,6 @@ def main():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        
-        # Update table schema
-        update_table(cursor)
 
         target_statistics = calculate_price_target_statistics(cursor)
         closing_prices = get_last_closing_price(cursor)
