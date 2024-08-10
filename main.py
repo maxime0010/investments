@@ -26,7 +26,7 @@ def fetch_analysts_data(analyst_names):
     for start in range(0, len(analyst_names), 50):
         batch = analyst_names[start:start+50]
         url = "https://api.benzinga.com/api/v2.1/calendar/ratings/analysts"
-        querystring = {"token": token, "analyst_names": ",".join(batch)}
+        querystring = {"token": token, "analyst_name": ",".join(batch)}
         response = requests.get(url, params=querystring)
         if response.status_code == 200:
             analysts_data.extend(response.json().get('analyst_ratings_analyst', []))
@@ -78,7 +78,10 @@ def insert_analysts_data(cursor, analysts_data):
 
 def get_unique_analyst_names(cursor):
     cursor.execute("SELECT DISTINCT analyst_name FROM ratings")
-    return [row[0] for row in cursor.fetchall()]
+    analyst_names = [row[0] for row in cursor.fetchall()]
+    print(f"Unique analysts found: {len(analyst_names)}")
+    print("Analyst names:", analyst_names)
+    return analyst_names
 
 def main():
     try:
