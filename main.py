@@ -1,16 +1,11 @@
 import os
-import requests
 import mysql.connector
+from datetime import datetime
 
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
 if not mdp:
     raise ValueError("No MySQL password found in environment variables")
-
-# Benzinga API token
-token = os.getenv("BENZINGA_API_KEY")
-if not token:
-    raise ValueError("No API token found in environment variables")
 
 # Database connection
 db_config = {
@@ -21,79 +16,122 @@ db_config = {
     'port': 25060
 }
 
-def fetch_analysts_data(analyst_names):
-    analysts_data = []
-    for start in range(0, len(analyst_names), 50):
-        batch = analyst_names[start:start+50]
-        url = "https://api.benzinga.com/api/v2.1/calendar/ratings/analysts"
-        querystring = {"token": token, "analyst_name": ",".join(batch)}
-        response = requests.get(url, params=querystring)
-        if response.status_code == 200:
-            analysts_data.extend(response.json().get('analyst_ratings_analyst', []))
-        else:
-            print(f"Error fetching data: {response.status_code}")
-    return analysts_data
+def calculate_price_target_statistics(cursor):
+    query = """
+        SELECT 
+            r.ticker,
+            AVG(r.adjusted_pt_current) AS average_price_target,
+            STDDEV(r.adjusted_pt_current) AS stddev_price_target,
+            COUNT(DISTINCT r.analyst_name) AS num_analysts,
+            MAX(r.date) AS last_update_date,
+            AVG(DATEDIFF(NOW(), r.date)) AS avg_days_since_last_update,
+            COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.analyst_name END) AS num_analysts_last_7_days,
+            STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.adjusted_pt_current END) AS stddev_price_target_last_7_days,
+            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN r.adjusted_pt_current END) AS average_price_target_last_7_days,
+            COUNT(DISTINCT CASE WHEN a.overall_success_rate > 60 THEN r.analyst_name END) AS num_high_success_analysts,
+            STDDEV(CASE WHEN a.overall_success_rate > 60 THEN r.adjusted_pt_current END) AS stddev_high_success_analysts,
+            AVG(CASE WHEN a.overall_success_rate > 60 THEN r.adjusted_pt_current END) AS avg_high_success_analysts
+        FROM (
+            SELECT 
+                ticker,
+                analyst_name,
+                MAX(date) AS latest_date
+            FROM ratings
+            GROUP BY ticker, analyst_name
+        ) AS latest_ratings
+        JOIN ratings AS r 
+        ON latest_ratings.ticker = r.ticker 
+        AND latest_ratings.analyst_name = r.analyst_name 
+        AND latest_ratings.latest_date = r.date
+        JOIN analysts AS a 
+        ON r.analyst_name = a.name_full
+        GROUP BY r.ticker
+    """
+    cursor.execute(query)
+    return cursor.fetchall()
 
-def clean_data(value, default=''):
-    return value.strip() if value else default
-
-def insert_analysts_data(cursor, analysts_data):
-    add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id, name_first, name_full, name_last, "
-                   "one_month_average_return, one_year_success_rate, two_year_success_rate, overall_success_rate, smart_score, total_ratings_percentile) "
-                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                   "ON DUPLICATE KEY UPDATE "
-                   "firm_name = VALUES(firm_name), "
-                   "name_first = VALUES(name_first), "
-                   "name_full = VALUES(name_full), "
-                   "name_last = VALUES(name_last), "
-                   "one_month_average_return = VALUES(one_month_average_return), "
-                   "one_year_success_rate = VALUES(one_year_success_rate), "
-                   "two_year_success_rate = VALUES(two_year_success_rate), "
-                   "overall_success_rate = VALUES(overall_success_rate), "
-                   "smart_score = VALUES(smart_score), "
-                   "total_ratings_percentile = VALUES(total_ratings_percentile)")
-
-    for analyst in analysts_data:
-        ratings_accuracy = analyst.get('ratings_accuracy', {})
-        data_tuple = (
-            clean_data(analyst.get('firm_id')),
-            clean_data(analyst.get('firm_name')),
-            clean_data(analyst.get('id')),
-            clean_data(analyst.get('name_first')),
-            clean_data(analyst.get('name_full')),
-            clean_data(analyst.get('name_last')),
-            float(ratings_accuracy.get('1m_average_return', 0)),
-            float(ratings_accuracy.get('1y_success_rate', 0)),
-            float(ratings_accuracy.get('2y_success_rate', 0)),
-            float(ratings_accuracy.get('overall_success_rate', 0)),
-            float(ratings_accuracy.get('smart_score', 0)),
-            float(ratings_accuracy.get('total_ratings_percentile', 0))
+def get_last_closing_price(cursor):
+    query = """
+        SELECT 
+            ticker,
+            close AS last_closing_price
+        FROM prices
+        WHERE (ticker, date) IN (
+            SELECT ticker, MAX(date) 
+            FROM prices 
+            GROUP BY ticker
         )
-        
-        try:
-            print(f"Inserting data tuple: {data_tuple}")  # Print data tuple before inserting
-            cursor.execute(add_analyst, data_tuple)
-        except mysql.connector.Error as err:
-            print(f"Error: {err}")
-            print(f"SQL Query: {cursor.statement}")
-            print(f"Data tuple: {data_tuple}")
+    """
+    cursor.execute(query)
+    return cursor.fetchall()
 
-def get_unique_analyst_names(cursor):
-    cursor.execute("SELECT DISTINCT analyst_name FROM ratings")
-    analyst_names = [row[0] for row in cursor.fetchall()]
-    print(f"Unique analysts found: {len(analyst_names)}")
-    print("Analyst names:", analyst_names)
-    return analyst_names
+def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
+    analysis_data = []
+    closing_price_dict = {price[0]: price[1] for price in closing_prices}
+    
+    for stats in target_statistics:
+        ticker = stats[0]
+        average_price_target = stats[1]
+        stddev_price_target = stats[2]
+        num_analysts = stats[3]
+        last_update_date = stats[4]
+        avg_days_since_last_update = stats[5]
+        num_analysts_last_7_days = stats[6]
+        stddev_price_target_last_7_days = stats[7]
+        average_price_target_last_7_days = stats[8]
+        num_high_success_analysts = stats[9]
+        stddev_high_success_analysts = stats[10]
+        avg_high_success_analysts = stats[11]
+        
+        last_closing_price = closing_price_dict.get(ticker)
+        
+        if last_closing_price is not None and average_price_target is not None:
+            expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
+            days_since_last_update = (datetime.now().date() - last_update_date).days
+            
+            expected_return_last_7_days = None
+            if average_price_target_last_7_days is not None:
+                expected_return_last_7_days = ((average_price_target_last_7_days - last_closing_price) / last_closing_price) * 100
+
+            expected_return_high_success = None
+            if avg_high_success_analysts is not None:
+                expected_return_high_success = ((avg_high_success_analysts - last_closing_price) / last_closing_price) * 100
+            
+            analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
+                                  num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
+                                  num_analysts_last_7_days, stddev_price_target_last_7_days, expected_return_last_7_days,
+                                  num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success))
+
+    insert_query = """
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_analysts_last_7_days, stddev_price_target_last_7_days, expected_return_last_7_days, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE 
+            last_closing_price = VALUES(last_closing_price), 
+            average_price_target = VALUES(average_price_target), 
+            expected_return = VALUES(expected_return),
+            num_analysts = VALUES(num_analysts),
+            stddev_price_target = VALUES(stddev_price_target),
+            days_since_last_update = VALUES(days_since_last_update),
+            avg_days_since_last_update = VALUES(avg_days_since_last_update),
+            num_analysts_last_7_days = VALUES(num_analysts_last_7_days),
+            stddev_price_target_last_7_days = VALUES(stddev_price_target_last_7_days),
+            expected_return_last_7_days = VALUES(expected_return_last_7_days),
+            num_high_success_analysts = VALUES(num_high_success_analysts),
+            stddev_high_success_analysts = VALUES(stddev_high_success_analysts),
+            avg_high_success_analysts = VALUES(avg_high_success_analysts),
+            expected_return_high_success = VALUES(expected_return_high_success)
+    """
+    cursor.executemany(insert_query, analysis_data)
 
 def main():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
-        analyst_names = get_unique_analyst_names(cursor)
-        if analyst_names:
-            analysts_data = fetch_analysts_data(analyst_names)
-            insert_analysts_data(cursor, analysts_data)
+        target_statistics = calculate_price_target_statistics(cursor)
+        closing_prices = get_last_closing_price(cursor)
+
+        calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
 
         conn.commit()
         cursor.close()
