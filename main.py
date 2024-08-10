@@ -39,8 +39,8 @@ def clean_data(value, default=''):
 
 def insert_analysts_data(cursor, analysts_data):
     add_analyst = ("INSERT INTO analysts (firm_id, firm_name, id, name_first, name_full, name_last, "
-                   "one_month_average_return, one_year_success_rate, two_year_success_rate, overall_success_rate, smart_score) "
-                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                   "one_month_average_return, one_year_success_rate, two_year_success_rate, overall_success_rate, smart_score, total_ratings_percentile) "
+                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                    "ON DUPLICATE KEY UPDATE "
                    "firm_name = VALUES(firm_name), "
                    "name_first = VALUES(name_first), "
@@ -50,7 +50,8 @@ def insert_analysts_data(cursor, analysts_data):
                    "one_year_success_rate = VALUES(one_year_success_rate), "
                    "two_year_success_rate = VALUES(two_year_success_rate), "
                    "overall_success_rate = VALUES(overall_success_rate), "
-                   "smart_score = VALUES(smart_score)")
+                   "smart_score = VALUES(smart_score), "
+                   "total_ratings_percentile = VALUES(total_ratings_percentile)")
 
     for analyst in analysts_data:
         ratings_accuracy = analyst.get('ratings_accuracy', {})
@@ -65,7 +66,8 @@ def insert_analysts_data(cursor, analysts_data):
             float(ratings_accuracy.get('1y_success_rate', 0)),
             float(ratings_accuracy.get('2y_success_rate', 0)),
             float(ratings_accuracy.get('overall_success_rate', 0)),
-            float(ratings_accuracy.get('smart_score', 0))
+            float(ratings_accuracy.get('smart_score', 0)),
+            float(ratings_accuracy.get('total_ratings_percentile', 0))
         )
         
         try:
