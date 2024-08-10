@@ -21,16 +21,18 @@ db_config = {
     'port': 25060
 }
 
-def fetch_analysts_data(offset=0, limit=1000):
-    url = "https://api.benzinga.com/api/v2.1/calendar/ratings/analysts"
-    querystring = {"token": token, "offset": offset, "limit": limit}
-    response = requests.get(url, params=querystring)
-    
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error fetching data: {response.status_code}")
-        return []
+def fetch_analysts_data(analyst_names):
+    analysts_data = []
+    for start in range(0, len(analyst_names), 50):
+        batch = analyst_names[start:start+50]
+        url = "https://api.benzinga.com/api/v2.1/calendar/ratings/analysts"
+        querystring = {"token": token, "analyst_names": ",".join(batch)}
+        response = requests.get(url, params=querystring)
+        if response.status_code == 200:
+            analysts_data.extend(response.json().get('analyst_ratings_analyst', []))
+        else:
+            print(f"Error fetching data: {response.status_code}")
+    return analysts_data
 
 def clean_data(value, default=''):
     return value.strip() if value else default
@@ -50,7 +52,7 @@ def insert_analysts_data(cursor, analysts_data):
                    "overall_success_rate = VALUES(overall_success_rate), "
                    "smart_score = VALUES(smart_score)")
 
-    for analyst in analysts_data.get('analyst_ratings_analyst', []):
+    for analyst in analysts_data:
         ratings_accuracy = analyst.get('ratings_accuracy', {})
         data_tuple = (
             clean_data(analyst.get('firm_id')),
@@ -74,13 +76,18 @@ def insert_analysts_data(cursor, analysts_data):
             print(f"SQL Query: {cursor.statement}")
             print(f"Data tuple: {data_tuple}")
 
+def get_unique_analyst_names(cursor):
+    cursor.execute("SELECT DISTINCT analyst_name FROM ratings")
+    return [row[0] for row in cursor.fetchall()]
+
 def main():
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
-        analysts_data = fetch_analysts_data()
-        if analysts_data:
+        analyst_names = get_unique_analyst_names(cursor)
+        if analyst_names:
+            analysts_data = fetch_analysts_data(analyst_names)
             insert_analysts_data(cursor, analysts_data)
 
         conn.commit()
