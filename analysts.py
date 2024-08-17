@@ -85,23 +85,15 @@ def get_unique_analyst_names(cursor):
     print("Analyst names:", analyst_names)
     return analyst_names
 
-def main():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+# Script execution
+conn = mysql.connector.connect(**db_config)
+cursor = conn.cursor()
 
-        analyst_names = get_unique_analyst_names(cursor)
-        if analyst_names:
-            analysts_data = fetch_analysts_data(analyst_names)
-            insert_analysts_data(cursor, analysts_data)
+analyst_names = get_unique_analyst_names(cursor)
+if analyst_names:
+    analysts_data = fetch_analysts_data(analyst_names)
+    insert_analysts_data(cursor, analysts_data)
 
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-if __name__ == "__main__":
-    main()
+conn.commit()
+cursor.close()
+conn.close()
