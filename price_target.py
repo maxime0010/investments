@@ -46,7 +46,7 @@ def insert_rating_data(rating_data):
         for rating in rating_data["ratings"]:
             # Ensure correct data types
             rating["adjusted_pt_current"] = float(rating["adjusted_pt_current"]) if rating["adjusted_pt_current"] else None
-            rating["adjusted_pt_prior"] = float(rating["adjusted_pt_prior"]) if rating["adjusted_pt_prior"]) else None
+            rating["adjusted_pt_prior"] = float(rating["adjusted_pt_prior"]) if rating["adjusted_pt_prior"] else None
             rating["pt_current"] = float(rating["pt_current"]) if rating["pt_current"] else None
             rating["pt_prior"] = float(rating["pt_prior"]) if rating["pt_prior"] else None
 
