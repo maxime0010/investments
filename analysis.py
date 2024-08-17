@@ -138,23 +138,15 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     """
     cursor.executemany(insert_query, analysis_data)
 
-def main():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+# Script execution
+conn = mysql.connector.connect(**db_config)
+cursor = conn.cursor()
 
-        target_statistics = calculate_price_target_statistics(cursor)
-        closing_prices = get_last_closing_price(cursor)
+target_statistics = calculate_price_target_statistics(cursor)
+closing_prices = get_last_closing_price(cursor)
 
-        calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
+calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
 
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-if __name__ == "__main__":
-    main()
+conn.commit()
+cursor.close()
+conn.close()
