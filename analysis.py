@@ -150,3 +150,47 @@ calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
 conn.commit()
 cursor.close()
 conn.close()
+
+def update_portfolio_table(cursor):
+    # Get the current date
+    current_date = datetime.now().date()
+
+    # Select the top 10 tickers by expected return from the analysis table
+    cursor.execute("""
+        SELECT ticker, expected_return
+        FROM analysis
+        ORDER BY expected_return DESC
+        LIMIT 10
+    """)
+    top_tickers = cursor.fetchall()
+
+    # Insert or update the portfolio table
+    insert_query = """
+        INSERT INTO portfolio (date, ranking, ticker)
+        VALUES (%s, %s, %s)
+        ON DUPLICATE KEY UPDATE ticker = VALUES(ticker)
+    """
+
+    portfolio_data = [(current_date, ranking + 1, ticker) for ranking, (ticker, _) in enumerate(top_tickers)]
+    cursor.executemany(insert_query, portfolio_data)
+
+def run_analysis():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        # Calculate and insert analysis data (existing functionality)
+        target_statistics = calculate_price_target_statistics(cursor)
+        closing_prices = get_last_closing_price(cursor)
+        calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
+
+        # Update the portfolio table with the top 10 tickers
+        update_portfolio_table(cursor)
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
