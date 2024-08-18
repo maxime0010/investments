@@ -1,10 +1,3 @@
-# config.py
-
-# Number of days to consider an update as "recent"
-DAYS_RECENT = 21
-
-# Minimum success rate for high-performing analysts
-MIN_SUCCESS_RATE = 50
-
-# Minimum number of analysts covering a stock to include in the analysis
-MIN_ANALYSTS = 5
+DAYS_RECENT = 21  # Number of days to define "recent"
+SUCCESS_RATE_THRESHOLD = 50  # Threshold for analysts' success rate
+MIN_ANALYSTS = 3  # Minimum number of analysts covering a stock
