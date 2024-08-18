@@ -16,8 +16,8 @@ db_config = {
     'port': 25060
 }
 
-initial_investment = 1000000  # Starting with $1M
-investment_per_stock = 100000  # $100K per stock
+# Allocate $100 evenly across all selected stocks
+investment_per_stock = 100 / 10  # $10 per stock, assuming 10 stocks
 
 def calculate_price_target_statistics(cursor):
     query = """
@@ -161,15 +161,15 @@ def update_portfolio_table(cursor):
     # Check if there's a change in the portfolio
     new_tickers = set(ticker for ticker, _, _ in top_tickers)
     if existing_tickers != new_tickers:
-        # ReIt seems the message was cut off. Here's the continuation and completion of the script:
-
-```python
-    if existing_tickers != new_tickers:
         # Rebalance the portfolio by selling everything and reallocating
         portfolio_data = []
         for ranking, (ticker, expected_return, last_price) in enumerate(top_tickers):
-            quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
-            total_value = quantity * last_price  # Calculate the total value of the investment in this stock
+            if last_price and last_price > 0:
+                quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
+                total_value = quantity * last_price  # Calculate the total value of the investment in this stock
+            else:
+                quantity = 0
+                total_value = 0
 
             portfolio_data.append((current_date, ranking + 1, ticker, quantity, total_value))
 
