@@ -171,6 +171,9 @@ def update_portfolio_table(cursor):
                 quantity = 0
                 total_value = 0
 
+            # Debugging: Print the calculated values
+            print(f"Ticker: {ticker}, Quantity: {quantity}, Total Value: {total_value}")
+
             portfolio_data.append((current_date, ranking + 1, ticker, quantity, total_value))
 
         # Clear previous entries for the current date
