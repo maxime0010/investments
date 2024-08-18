@@ -7,7 +7,7 @@ mdp = os.getenv("MYSQL_MDP")
 if not mdp:
     raise ValueError("No MySQL password found in environment variables")
 
-# Database connection
+# Database connection configuration
 db_config = {
     'user': 'doadmin',
     'password': mdp,
@@ -138,19 +138,6 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     """
     cursor.executemany(insert_query, analysis_data)
 
-# Script execution
-conn = mysql.connector.connect(**db_config)
-cursor = conn.cursor()
-
-target_statistics = calculate_price_target_statistics(cursor)
-closing_prices = get_last_closing_price(cursor)
-
-calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
-
-conn.commit()
-cursor.close()
-conn.close()
-
 def update_portfolio_table(cursor):
     # Get the current date
     current_date = datetime.now().date()
@@ -174,23 +161,23 @@ def update_portfolio_table(cursor):
     portfolio_data = [(current_date, ranking + 1, ticker) for ranking, (ticker, _) in enumerate(top_tickers)]
     cursor.executemany(insert_query, portfolio_data)
 
-def run_analysis():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+# Script execution
+try:
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor()
 
-        # Calculate and insert analysis data (existing functionality)
-        target_statistics = calculate_price_target_statistics(cursor)
-        closing_prices = get_last_closing_price(cursor)
-        calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
+    target_statistics = calculate_price_target_statistics(cursor)
+    closing_prices = get_last_closing_price(cursor)
 
-        # Update the portfolio table with the top 10 tickers
-        update_portfolio_table(cursor)
+    calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
 
-        conn.commit()
-        cursor.close()
-        conn.close()
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    # Update the portfolio table with the top 10 tickers
+    update_portfolio_table(cursor)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+except mysql.connector.Error as err:
+    print(f"Error: {err}")
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")
