@@ -142,11 +142,16 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     cursor.executemany(insert_query, analysis_data)
 
 def update_portfolio_table(cursor):
-    # Get the current date
-    current_date = datetime.now().date()
+    # Fetch the latest date from the prices table
+    cursor.execute("SELECT MAX(date) FROM prices")
+    latest_date = cursor.fetchone()[0]
 
-    # Get the existing tickers in the portfolio
-    cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (current_date,))
+    if not latest_date:
+        print("No price data available.")
+        return
+
+    # Get the existing tickers in the portfolio for the latest date
+    cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (latest_date,))
     existing_tickers = set(row[0] for row in cursor.fetchall())
 
     # Select the top 10 tickers by expected return from the analysis table
@@ -174,10 +179,10 @@ def update_portfolio_table(cursor):
             # Debugging: Print the calculated values
             print(f"Ticker: {ticker}, Quantity: {quantity}, Total Value: {total_value}")
 
-            portfolio_data.append((current_date, ranking + 1, ticker, quantity, total_value))
+            portfolio_data.append((latest_date, ranking + 1, ticker, quantity, total_value))
 
         # Clear previous entries for the current date
-        cursor.execute("DELETE FROM portfolio WHERE date = %s", (current_date,))
+        cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
         cursor.executemany("""
             INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
             VALUES (%s, %s, %s, %s, %s)
