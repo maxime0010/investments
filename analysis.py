@@ -16,6 +16,9 @@ db_config = {
     'port': 25060
 }
 
+initial_investment = 1000000  # Starting with $1M
+investment_per_stock = 100000  # $100K per stock
+
 def calculate_price_target_statistics(cursor):
     query = """
         SELECT 
@@ -142,24 +145,40 @@ def update_portfolio_table(cursor):
     # Get the current date
     current_date = datetime.now().date()
 
+    # Get the existing tickers in the portfolio
+    cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (current_date,))
+    existing_tickers = set(row[0] for row in cursor.fetchall())
+
     # Select the top 10 tickers by expected return from the analysis table
     cursor.execute("""
-        SELECT ticker, expected_return
+        SELECT ticker, expected_return, last_closing_price
         FROM analysis
         ORDER BY expected_return DESC
         LIMIT 10
     """)
     top_tickers = cursor.fetchall()
 
-    # Insert or update the portfolio table
-    insert_query = """
-        INSERT INTO portfolio (date, ranking, ticker)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE ticker = VALUES(ticker)
-    """
+    # Check if there's a change in the portfolio
+    new_tickers = set(ticker for ticker, _, _ in top_tickers)
+    if existing_tickers != new_tickers:
+        # ReIt seems the message was cut off. Here's the continuation and completion of the script:
 
-    portfolio_data = [(current_date, ranking + 1, ticker) for ranking, (ticker, _) in enumerate(top_tickers)]
-    cursor.executemany(insert_query, portfolio_data)
+```python
+    if existing_tickers != new_tickers:
+        # Rebalance the portfolio by selling everything and reallocating
+        portfolio_data = []
+        for ranking, (ticker, expected_return, last_price) in enumerate(top_tickers):
+            quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
+            total_value = quantity * last_price  # Calculate the total value of the investment in this stock
+
+            portfolio_data.append((current_date, ranking + 1, ticker, quantity, total_value))
+
+        # Clear previous entries for the current date
+        cursor.execute("DELETE FROM portfolio WHERE date = %s", (current_date,))
+        cursor.executemany("""
+            INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
+            VALUES (%s, %s, %s, %s, %s)
+        """, portfolio_data)
 
 # Script execution
 try:
