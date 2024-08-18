@@ -1,6 +1,7 @@
 import os
 import mysql.connector
 from datetime import datetime
+from config import DAYS_RECENT, MIN_SUCCESS_RATE, MIN_ANALYSTS
 
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
@@ -20,7 +21,7 @@ db_config = {
 investment_per_stock = 100 / 10  # $10 per stock, assuming 10 stocks
 
 def calculate_price_target_statistics(cursor):
-    query = """
+    query = f"""
         SELECT 
             r.ticker,
             AVG(r.adjusted_pt_current) AS average_price_target,
@@ -28,15 +29,15 @@ def calculate_price_target_statistics(cursor):
             COUNT(DISTINCT r.analyst_name) AS num_analysts,
             MAX(r.date) AS last_update_date,
             AVG(DATEDIFF(NOW(), r.date)) AS avg_days_since_last_update,
-            COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 21 DAY) THEN r.analyst_name END) AS num_analysts_last_21_days,
-            STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 21 DAY) THEN r.adjusted_pt_current END) AS stddev_price_target_last_21_days,
-            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 21 DAY) THEN r.adjusted_pt_current END) AS average_price_target_last_21_days,
-            COUNT(DISTINCT CASE WHEN a.overall_success_rate > 50 THEN r.analyst_name END) AS num_high_success_analysts,
-            STDDEV(CASE WHEN a.overall_success_rate > 50 THEN r.adjusted_pt_current END) AS stddev_high_success_analysts,
-            AVG(CASE WHEN a.overall_success_rate > 50 THEN r.adjusted_pt_current END) AS avg_high_success_analysts,
-            COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 21 DAY) AND a.overall_success_rate > 50 THEN r.analyst_name END) AS num_combined_criteria,
-            STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 21 DAY) AND a.overall_success_rate > 50 THEN r.adjusted_pt_current END) AS stddev_combined_criteria,
-            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL 21 DAY) AND a.overall_success_rate > 50 THEN r.adjusted_pt_current END) AS avg_combined_criteria
+            COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) THEN r.analyst_name END) AS num_analysts_recent,
+            STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) THEN r.adjusted_pt_current END) AS stddev_price_target_recent,
+            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) THEN r.adjusted_pt_current END) AS average_price_target_recent,
+            COUNT(DISTINCT CASE WHEN a.overall_success_rate > {MIN_SUCCESS_RATE} THEN r.analyst_name END) AS num_high_success_analysts,
+            STDDEV(CASE WHEN a.overall_success_rate > {MIN_SUCCESS_RATE} THEN r.adjusted_pt_current END) AS stddev_high_success_analysts,
+            AVG(CASE WHEN a.overall_success_rate > {MIN_SUCCESS_RATE} THEN r.adjusted_pt_current END) AS avg_high_success_analysts,
+            COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {MIN_SUCCESS_RATE} THEN r.analyst_name END) AS num_combined_criteria,
+            STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {MIN_SUCCESS_RATE} THEN r.adjusted_pt_current END) AS stddev_combined_criteria,
+            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {MIN_SUCCESS_RATE} THEN r.adjusted_pt_current END) AS avg_combined_criteria
         FROM (
             SELECT 
                 ticker,
@@ -52,6 +53,7 @@ def calculate_price_target_statistics(cursor):
         JOIN analysts AS a 
         ON r.analyst_name = a.name_full
         GROUP BY r.ticker
+        HAVING COUNT(DISTINCT r.analyst_name) >= {MIN_ANALYSTS}
     """
     cursor.execute(query)
     return cursor.fetchall()
@@ -82,9 +84,9 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
         num_analysts = stats[3]
         last_update_date = stats[4]
         avg_days_since_last_update = stats[5]
-        num_analysts_last_21_days = stats[6]
-        stddev_price_target_last_21_days = stats[7]
-        average_price_target_last_21_days = stats[8]
+        num_analysts_recent = stats[6]
+        stddev_price_target_recent = stats[7]
+        average_price_target_recent = stats[8]
         num_high_success_analysts = stats[9]
         stddev_high_success_analysts = stats[10]
         avg_high_success_analysts = stats[11]
@@ -98,9 +100,9 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
             days_since_last_update = (datetime.now().date() - last_update_date).days
             
-            expected_return_last_21_days = None
-            if average_price_target_last_21_days is not None:
-                expected_return_last_21_days = ((average_price_target_last_21_days - last_closing_price) / last_closing_price) * 100
+            expected_return_recent = None
+            if average_price_target_recent is not None:
+                expected_return_recent = ((average_price_target_recent - last_closing_price) / last_closing_price) * 100
 
             expected_return_high_success = None
             if avg_high_success_analysts is not None:
@@ -112,12 +114,12 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
 
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
                                   num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
-                                  num_analysts_last_21_days, stddev_price_target_last_21_days, expected_return_last_21_days,
+                                  num_analysts_recent, stddev_price_target_recent, expected_return_recent,
                                   num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success,
                                   num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria))
 
     insert_query = """
-        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_analysts_last_21_days, stddev_price_target_last_21_days, expected_return_last_21_days, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_analysts_recent, stddev_price_target_recent, expected_return_recent, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE 
             last_closing_price = VALUES(last_closing_price), 
@@ -127,9 +129,9 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             stddev_price_target = VALUES(stddev_price_target),
             days_since_last_update = VALUES(days_since_last_update),
             avg_days_since_last_update = VALUES(avg_days_since_last_update),
-            num_analysts_last_21_days = VALUES(num_analysts_last_21_days),
-            stddev_price_target_last_21_days = VALUES(stddev_price_target_last_21_days),
-            expected_return_last_21_days = VALUES(expected_return_last_21_days),
+            num_analysts_recent = VALUES(num_analysts_recent),
+            stddev_price_target_recent = VALUES(stddev_price_target_recent),
+            expected_return_recent = VALUES(expected_return_recent),
             num_high_success_analysts = VALUES(num_high_success_analysts),
             stddev_high_success_analysts = VALUES(stddev_high_success_analysts),
             avg_high_success_analysts = VALUES(avg_high_success_analysts),
@@ -176,35 +178,8 @@ def update_portfolio_table(cursor):
                 quantity = 0
                 total_value = 0
 
-            # Debugging: Print the calculated values
-            print(f"Ticker: {ticker}, Quantity: {quantity}, Total Value: {total_value}")
+            # Debugging: Print the calculated
 
-            portfolio_data.append((latest_date, ranking + 1, ticker, quantity, total_value))
 
-        # Clear previous entries for the current date
-        cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
-        cursor.executemany("""
-            INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
-            VALUES (%s, %s, %s, %s, %s)
-        """, portfolio_data)
 
-# Script execution
-try:
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor()
 
-    target_statistics = calculate_price_target_statistics(cursor)
-    closing_prices = get_last_closing_price(cursor)
-
-    calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
-
-    # Update the portfolio table with the top 10 tickers
-    update_portfolio_table(cursor)
-
-    conn.commit()
-    cursor.close()
-    conn.close()
-except mysql.connector.Error as err:
-    print(f"Error: {err}")
-except Exception as e:
-    print(f"An unexpected error occurred: {e}")
