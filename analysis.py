@@ -80,6 +80,11 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     closing_price_dict = {price[0]: price[1] for price in closing_prices}
     
     for stats in target_statistics:
+        print(stats)  # Debugging: print the content of stats
+        if len(stats) < 16:  # Expecting at least 16 elements
+            print(f"Error: stats tuple has only {len(stats)} elements, skipping this entry.")
+            continue
+
         ticker = stats[0]
         average_price_target = stats[1]
         stddev_price_target = stats[2]
@@ -103,10 +108,13 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
             
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
-                                  num_analysts, stddev_price_target, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_recent, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria))
+                                  num_analysts, stddev_price_target, avg_days_since_last_update, 
+                                  num_recent_analysts, stddev_price_target_recent, expected_return_combined_criteria, 
+                                  num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, 
+                                  expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria))
 
     insert_query = """
-        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_recent, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_combined_criteria, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE 
             last_closing_price = VALUES(last_closing_price), 
@@ -117,7 +125,7 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             avg_days_since_last_update = VALUES(avg_days_since_last_update),
             num_recent_analysts = VALUES(num_recent_analysts),
             stddev_price_target_recent = VALUES(stddev_price_target_recent),
-            expected_return_recent = VALUES(expected_return_recent),
+            expected_return_recent = VALUES(expected_return_combined_criteria),
             num_high_success_analysts = VALUES(num_high_success_analysts),
             stddev_high_success_analysts = VALUES(stddev_high_success_analysts),
             avg_high_success_analysts = VALUES(avg_high_success_analysts),
@@ -128,6 +136,7 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             expected_return_combined_criteria = VALUES(expected_return_combined_criteria)
     """
     cursor.executemany(insert_query, analysis_data)
+
 
 def update_portfolio_table(cursor):
     cursor.execute("SELECT MAX(date) FROM prices")
