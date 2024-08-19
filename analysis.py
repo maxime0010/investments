@@ -174,7 +174,17 @@ try:
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
-    closing_prices = get_last_closing_price(cursor)
+closing_prices = get_last_closing_price(cursor)
+print(type(closing_prices))  # Should print <class 'list'>
+print(closing_prices)  # Should show the content of the list
+
+closing_price_dict = {price[0]: price[1] for price in closing_prices}  # Ensure this is a dict
+print(closing_price_dict)  # Should show a dictionary
+
+for stats in target_statistics:
+    ticker = stats[0]
+    last_closing_price = closing_price_dict.get(ticker)
+
     target_statistics = calculate_price_target_statistics(cursor, closing_prices)
 
     calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
