@@ -141,6 +141,8 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             weighted_return_combined_criteria = VALUES(weighted_return_combined_criteria)
     """
     cursor.executemany(insert_query, analysis_data)
+    print("Analysis Data:", analysis_data)
+
 
 def update_portfolio_table(cursor):
     # Fetch the latest date from the prices table
