@@ -106,25 +106,7 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             
             expected_return_combined_criteria = None
             if avg_combined_criteria is not None:
-                total_success_weighted_return = 0
-                total_success_rate = 0
-                
-                cursor.execute("""
-                    SELECT r.adjusted_pt_current, a.overall_success_rate
-                    FROM ratings r
-                    JOIN analysts a ON r.analyst_name = a.name_full
-                    WHERE r.ticker = %s AND r.date >= DATE_SUB(NOW(), INTERVAL %s DAY) AND a.overall_success_rate > %s
-                """, (ticker, DAYS_RECENT, SUCCESS_RATE_THRESHOLD))
-                
-                combined_ratings = cursor.fetchall()
-                
-                for pt_current, success_rate in combined_ratings:
-                    if pt_current and success_rate:
-                        total_success_weighted_return += (success_rate / 100) * ((pt_current - last_closing_price) / last_closing_price) * 100
-                        total_success_rate += success_rate / 100
-
-                if total_success_rate > 0:
-                    expected_return_combined_criteria = total_success_weighted_return / total_success_rate
+                expected_return_combined_criteria = ((avg_combined_criteria - last_closing_price) / last_closing_price) * 100
 
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
                                   num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
@@ -158,22 +140,31 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     cursor.executemany(insert_query, analysis_data)
 
 def update_portfolio_table(cursor):
-    # Fetch the latest date from the prices table
-    cursor.execute("SELECT MAX(date) FROM prices")
+    # Fetch the latest date from the portfolio table
+    cursor.execute("SELECT MAX(date) FROM portfolio")
     latest_date = cursor.fetchone()[0]
 
     if not latest_date:
-        print("No price data available.")
+        print("No portfolio data available.")
+        return
+
+    # Calculate the current total value of the portfolio based on the latest stock prices
+    cursor.execute("""
+        SELECT p.ticker, p.quantity, a.last_closing_price
+        FROM portfolio p
+        JOIN analysis a ON p.ticker = a.ticker
+        WHERE p.date = %s
+    """, (latest_date,))
+    portfolio_entries = cursor.fetchall()
+
+    total_portfolio_value = sum(entry[1] * entry[2] for entry in portfolio_entries)
+
+    if not total_portfolio_value:
+        print("No value available for reinvestment.")
         return
 
     # Get the existing tickers in the portfolio for the latest date
-    cursor.execute("SELECT ticker, total_value FROM portfolio WHERE date = %s", (latest_date,))
-    existing_portfolio = cursor.fetchall()
-    total_investment = sum(row[1] for row in existing_portfolio)
-
-    # If no existing portfolio, set the investment to 100
-    if total_investment == 0:
-        total_investment = 100
+    existing_tickers = set(entry[0] for entry in portfolio_entries)
 
     # Select the top 10 tickers by expected return from the analysis table
     cursor.execute("""
@@ -186,12 +177,11 @@ def update_portfolio_table(cursor):
 
     # Check if there's a change in the portfolio
     new_tickers = set(ticker for ticker, _, _ in top_tickers)
-    existing_tickers = set(row[0] for row in existing_portfolio)
-
     if existing_tickers != new_tickers:
-        # Rebalance the portfolio by selling everything and reallocating
+        # Rebalance the portfolio by selling everything and reallocating the total value
         portfolio_data = []
-        investment_per_stock = total_investment / 10  # Allocate evenly among 10 stocks
+        investment_per_stock = total_portfolio_value / 10  # Divide the total value among the 10 stocks
+
         for ranking, (ticker, expected_return, last_price) in enumerate(top_tickers):
             if last_price and last_price > 0:
                 quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
