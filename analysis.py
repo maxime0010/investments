@@ -166,11 +166,12 @@ def update_portfolio_table(cursor):
     # Get the existing tickers in the portfolio for the latest date
     existing_tickers = set(entry[0] for entry in portfolio_entries)
 
-    # Select the top 10 tickers by expected return from the analysis table
-    cursor.execute("""
-        SELECT ticker, expected_return, last_closing_price
+    # Select the top 10 tickers by expected_return_combined_criteria from the analysis table
+    cursor.execute(f"""
+        SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis
-        ORDER BY expected_return DESC
+        WHERE num_combined_criteria >= {MIN_ANALYSTS}
+        ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """)
     top_tickers = cursor.fetchall()
@@ -182,7 +183,7 @@ def update_portfolio_table(cursor):
         portfolio_data = []
         investment_per_stock = total_portfolio_value / 10  # Divide the total value among the 10 stocks
 
-        for ranking, (ticker, expected_return, last_price) in enumerate(top_tickers):
+        for ranking, (ticker, expected_return_combined_criteria, last_price) in enumerate(top_tickers):
             if last_price and last_price > 0:
                 quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
                 total_value = quantity * last_price  # Calculate the total value of the investment in this stock
