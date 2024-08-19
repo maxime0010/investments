@@ -17,11 +17,6 @@ db_config = {
     'port': 25060
 }
 
-# Define the total investment amount and calculate the investment per stock
-total_investment = 100  # Total investment amount, e.g., $100
-num_stocks = 10  # Number of stocks to invest in
-investment_per_stock = total_investment / num_stocks  # Calculate investment per stock
-
 def calculate_price_target_statistics(cursor):
     query = f"""
         SELECT 
@@ -153,6 +148,10 @@ def update_portfolio_table(cursor):
         print("No price data available.")
         return
 
+    # Calculate the total value of the current portfolio
+    cursor.execute("SELECT SUM(total_value) FROM portfolio WHERE date = %s", (latest_date,))
+    total_portfolio_value = cursor.fetchone()[0] or 100  # Default to 100 if the portfolio is empty
+
     # Get the existing tickers in the portfolio for the latest date
     cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (latest_date,))
     existing_tickers = set(row[0] for row in cursor.fetchall())
@@ -171,6 +170,8 @@ def update_portfolio_table(cursor):
     if existing_tickers != new_tickers:
         # Rebalance the portfolio by selling everything and reallocating
         portfolio_data = []
+        investment_per_stock = total_portfolio_value / 10  # Divide the total portfolio value by 10
+
         for ranking, (ticker, expected_return, last_price) in enumerate(top_tickers):
             if last_price and last_price > 0:
                 quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
