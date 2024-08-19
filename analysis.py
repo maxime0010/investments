@@ -35,7 +35,7 @@ def calculate_price_target_statistics(cursor):
             COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.analyst_name END) AS num_combined_criteria,
             STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS stddev_combined_criteria,
             AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS avg_combined_criteria,
-            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current * a.overall_success_rate / 100 END) AS weighted_return_combined_criteria
+            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current * a.overall_success_rate / 100 END) AS expected_return_combined_criteria
         FROM (
             SELECT 
                 ticker,
@@ -90,7 +90,7 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
         num_combined_criteria = stats[12]
         stddev_combined_criteria = stats[13]
         avg_combined_criteria = stats[14]
-        weighted_return_combined_criteria = stats[15]
+        expected_return_combined_criteria = stats[15]
         
         last_closing_price = closing_price_dict.get(ticker)
         
@@ -106,18 +106,14 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             if avg_high_success_analysts is not None:
                 expected_return_high_success = ((avg_high_success_analysts - last_closing_price) / last_closing_price) * 100
             
-            expected_return_combined_criteria = None
-            if avg_combined_criteria is not None:
-                expected_return_combined_criteria = ((avg_combined_criteria - last_closing_price) / last_closing_price) * 100
-
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
                                   num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
                                   num_recent_analysts, stddev_price_target_recent, expected_return_recent,
                                   num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success,
-                                  num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria, weighted_return_combined_criteria))
+                                  num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria))
 
     insert_query = """
-        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_recent, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria, weighted_return_combined_criteria)
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_recent, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE 
             last_closing_price = VALUES(last_closing_price), 
@@ -137,12 +133,9 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             num_combined_criteria = VALUES(num_combined_criteria),
             stddev_combined_criteria = VALUES(stddev_combined_criteria),
             avg_combined_criteria = VALUES(avg_combined_criteria),
-            expected_return_combined_criteria = VALUES(expected_return_combined_criteria),
-            weighted_return_combined_criteria = VALUES(weighted_return_combined_criteria)
+            expected_return_combined_criteria = VALUES(expected_return_combined_criteria)
     """
     cursor.executemany(insert_query, analysis_data)
-    print("Analysis Data:", analysis_data)
-
 
 def update_portfolio_table(cursor):
     # Fetch the latest date from the prices table
@@ -157,12 +150,12 @@ def update_portfolio_table(cursor):
     cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (latest_date,))
     existing_tickers = set(row[0] for row in cursor.fetchall())
 
-    # Select the top 10 tickers by weighted_return_combined_criteria from the analysis table
+    # Select the top 10 tickers by expected_return_combined_criteria from the analysis table
     cursor.execute("""
-        SELECT ticker, weighted_return_combined_criteria, last_closing_price
+        SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis
         WHERE num_combined_criteria >= %s
-        ORDER BY weighted_return_combined_criteria DESC
+        ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """, (MIN_ANALYSTS,))
     top_tickers = cursor.fetchall()
@@ -215,3 +208,9 @@ except mysql.connector.Error as err:
     print(f"Error: {err}")
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
+
+
+
+
+
+
