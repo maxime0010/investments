@@ -17,6 +17,11 @@ db_config = {
     'port': 25060
 }
 
+# Define the total investment amount and calculate the investment per stock
+total_investment = 100  # Total investment amount, e.g., $100
+num_stocks = 10  # Number of stocks to invest in
+investment_per_stock = total_investment / num_stocks  # Calculate investment per stock
+
 def calculate_price_target_statistics(cursor):
     query = f"""
         SELECT 
@@ -203,5 +208,3 @@ except mysql.connector.Error as err:
     print(f"Error: {err}")
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
-
-
