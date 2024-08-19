@@ -35,10 +35,10 @@ def calculate_price_target_statistics(cursor, closing_price_dict):
             COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.analyst_name END) AS num_combined_criteria,
             STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS stddev_combined_criteria,
             SUM(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} 
-                     THEN (r.adjusted_pt_current - {closing_price_dict.get(r.ticker, 'NULL')}) / {closing_price_dict.get(r.ticker, 'NULL')} * 100 * a.overall_success_rate / 100 
+                     THEN (r.adjusted_pt_current - {closing_price_dict.get('ticker', 'NULL')}) / {closing_price_dict.get('ticker', 'NULL')} * 100 * a.overall_success_rate / 100 
                      ELSE 0 
-                END) / NULLIF(SUM(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD}
-                     THEN a.overall_success_rate ELSE 0 END), 0) AS expected_return_combined_criteria
+                END) / SUM(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD}
+                     THEN a.overall_success_rate ELSE 0 END) AS expected_return_combined_criteria
         FROM (
             SELECT 
                 ticker,
@@ -57,6 +57,7 @@ def calculate_price_target_statistics(cursor, closing_price_dict):
     """
     cursor.execute(query)
     return cursor.fetchall()
+
 
 def get_last_closing_price(cursor):
     query = """
