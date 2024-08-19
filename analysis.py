@@ -140,31 +140,32 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     cursor.executemany(insert_query, analysis_data)
 
 def update_portfolio_table(cursor):
-    # Fetch the latest date from the portfolio table
-    cursor.execute("SELECT MAX(date) FROM portfolio")
+    # Fetch the latest date from the prices table
+    cursor.execute("SELECT MAX(date) FROM prices")
     latest_date = cursor.fetchone()[0]
 
     if not latest_date:
-        print("No portfolio data available.")
+        print("No price data available.")
         return
 
-    # Calculate the current total value of the portfolio based on the latest stock prices
-    cursor.execute("""
-        SELECT p.ticker, p.quantity, a.last_closing_price
-        FROM portfolio p
-        JOIN analysis a ON p.ticker = a.ticker
-        WHERE p.date = %s
-    """, (latest_date,))
-    portfolio_entries = cursor.fetchall()
+    # Get the existing tickers in the portfolio for the latest date
+    cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (latest_date,))
+    previous_portfolio = cursor.fetchall()
 
-    total_portfolio_value = sum(entry[1] * entry[2] for entry in portfolio_entries)
+    # Calculate the current total value of the portfolio based on the latest stock prices
+    total_portfolio_value = 0
+    if previous_portfolio:
+        cursor.execute("""
+            SELECT SUM(p.quantity * a.last_closing_price)
+            FROM portfolio p
+            JOIN analysis a ON p.ticker = a.ticker
+            WHERE p.date = %s
+        """, (latest_date,))
+        total_portfolio_value = cursor.fetchone()[0]
 
     if not total_portfolio_value:
         print("No value available for reinvestment.")
         return
-
-    # Get the existing tickers in the portfolio for the latest date
-    existing_tickers = set(entry[0] for entry in portfolio_entries)
 
     # Select the top 10 tickers by expected_return_combined_criteria from the analysis table
     cursor.execute(f"""
@@ -178,7 +179,9 @@ def update_portfolio_table(cursor):
 
     # Check if there's a change in the portfolio
     new_tickers = set(ticker for ticker, _, _ in top_tickers)
-    if existing_tickers != new_tickers:
+    previous_tickers = set(ticker for ticker, in previous_portfolio)
+    
+    if previous_tickers != new_tickers:
         # Rebalance the portfolio by selling everything and reallocating the total value
         portfolio_data = []
         investment_per_stock = total_portfolio_value / 10  # Divide the total value among the 10 stocks
