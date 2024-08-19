@@ -93,27 +93,28 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
         num_combined_criteria = stats[12]
         stddev_combined_criteria = stats[13]
         avg_combined_criteria = stats[14]
-        expected_return_combined_criteria = stats[15]
         
         last_closing_price = closing_price_dict.get(ticker)
         
+        # Calculate weighted return based on success rate
         if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
-            days_since_last_update = (datetime.now().date() - last_update_date).days
+            weighted_return_combined_criteria = None
+            if avg_combined_criteria is not None:
+                weighted_return_combined_criteria = ((avg_combined_criteria - last_closing_price) / last_closing_price) * (avg_high_success_analysts / 100)
             
-            expected_return_recent = None
-            if average_price_target_recent is not None:
-                expected_return_recent = ((average_price_target_recent - last_closing_price) / last_closing_price) * 100
+            # Debugging output
+            print(f"Ticker: {ticker}")
+            print(f"Last Price: {last_closing_price}")
+            print(f"Average Price Target: {average_price_target}")
+            print(f"Expected Return: {expected_return}")
+            print(f"Weighted Return Combined Criteria: {weighted_return_combined_criteria}")
 
-            expected_return_high_success = None
-            if avg_high_success_analysts is not None:
-                expected_return_high_success = ((avg_high_success_analysts - last_closing_price) / last_closing_price) * 100
-            
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
                                   num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
                                   num_recent_analysts, stddev_price_target_recent, expected_return_recent,
                                   num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success,
-                                  num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria))
+                                  num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, weighted_return_combined_criteria))
 
     insert_query = """
         INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_recent, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
@@ -136,9 +137,10 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             num_combined_criteria = VALUES(num_combined_criteria),
             stddev_combined_criteria = VALUES(stddev_combined_criteria),
             avg_combined_criteria = VALUES(avg_combined_criteria),
-            expected_return_combined_criteria = VALUES(expected_return_combined_criteria)
+            expected_return_combined_criteria = VALUES(weighted_return_combined_criteria)
     """
     cursor.executemany(insert_query, analysis_data)
+
 
 def update_portfolio_table(cursor):
     # Fetch the latest date from the prices table
