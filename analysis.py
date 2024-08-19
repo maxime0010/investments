@@ -17,7 +17,7 @@ db_config = {
     'port': 25060
 }
 
-def calculate_price_target_statistics(cursor):
+def calculate_price_target_statistics(cursor, closing_price_dict):
     query = f"""
         SELECT 
             r.ticker,
@@ -34,7 +34,7 @@ def calculate_price_target_statistics(cursor):
             AVG(CASE WHEN a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS avg_high_success_analysts,
             COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.analyst_name END) AS num_combined_criteria,
             STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS stddev_combined_criteria,
-            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS avg_combined_criteria
+            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN (r.adjusted_pt_current - {closing_price_dict['ticker']}) / {closing_price_dict['ticker']} * 100 ELSE 0 END) AS expected_return_combined_criteria
         FROM (
             SELECT 
                 ticker,
@@ -53,6 +53,7 @@ def calculate_price_target_statistics(cursor):
     """
     cursor.execute(query)
     return cursor.fetchall()
+
 
 
 
