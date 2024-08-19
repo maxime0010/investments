@@ -34,6 +34,41 @@ def get_top_stocks(latest_date):
     conn.close()
     return top_stocks
 
+def initialize_portfolio():
+    conn = mysql.connector.connect(**db_config)
+    cursor = conn.cursor()
+
+    # Fetch the latest date from the prices table
+    cursor.execute("SELECT MAX(date) FROM prices")
+    latest_date = cursor.fetchone()[0]
+
+    # If no portfolio exists, initialize it with a total value of 10 for each stock
+    cursor.execute("SELECT COUNT(*) FROM portfolio WHERE date = %s", (latest_date,))
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+            SELECT ticker, expected_return_combined_criteria, last_closing_price
+            FROM analysis
+            ORDER BY expected_return_combined_criteria DESC
+            LIMIT 10
+        """)
+        top_tickers = cursor.fetchall()
+
+        portfolio_data = []
+        for ticker, _, last_price in top_tickers:
+            quantity = 10 / last_price
+            total_value = quantity * last_price
+            portfolio_data.append((latest_date, ticker, quantity, total_value))
+
+        cursor.executemany("""
+            INSERT INTO portfolio (date, ticker, quantity, total_value)
+            VALUES (%s, %s, %s, %s)
+        """, portfolio_data)
+
+        conn.commit()
+
+    cursor.close()
+    conn.close()
+
 @app.route('/')
 def portfolio():
     conn = mysql.connector.connect(**db_config)
@@ -42,6 +77,9 @@ def portfolio():
     # Fetch the latest date from the portfolio table
     cursor.execute("SELECT MAX(date) FROM portfolio")
     latest_date = cursor.fetchone()[0]
+
+    if not latest_date:
+        initialize_portfolio()
 
     top_stocks = get_top_stocks(latest_date)
 
