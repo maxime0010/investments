@@ -35,7 +35,7 @@ def calculate_price_target_statistics(cursor, closing_price_dict):
             COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.analyst_name END) AS num_combined_criteria,
             STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS stddev_combined_criteria,
             SUM(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} 
-                     THEN (r.adjusted_pt_current - {closing_price_dict['ticker']}) / {closing_price_dict['ticker']} * 100 * a.overall_success_rate / 100 
+                     THEN (r.adjusted_pt_current - {closing_price_dict.get(r.ticker, 'NULL')}) / {closing_price_dict.get(r.ticker, 'NULL')} * 100 * a.overall_success_rate / 100 
                      ELSE 0 
                 END) / SUM(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD}
                      THEN a.overall_success_rate ELSE 0 END) AS expected_return_combined_criteria
@@ -57,8 +57,6 @@ def calculate_price_target_statistics(cursor, closing_price_dict):
     """
     cursor.execute(query)
     return cursor.fetchall()
-
-
 
 def get_last_closing_price(cursor):
     query = """
@@ -177,18 +175,10 @@ try:
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
-closing_prices = get_last_closing_price(cursor)
-print(type(closing_prices))  # Should print <class 'list'>
-print(closing_prices)  # Should show the content of the list
+    closing_prices = get_last_closing_price(cursor)
+    closing_price_dict = {price[0]: price[1] for price in closing_prices}
 
-closing_price_dict = {price[0]: price[1] for price in closing_prices}  # Ensure this is a dict
-print(closing_price_dict)  # Should show a dictionary
-
-for stats in target_statistics:
-    ticker = stats[0]
-    last_closing_price = closing_price_dict.get(ticker)
-
-    target_statistics = calculate_price_target_statistics(cursor, closing_prices)
+    target_statistics = calculate_price_target_statistics(cursor, closing_price_dict)
 
     calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
 
