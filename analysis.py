@@ -17,7 +17,7 @@ db_config = {
     'port': 25060
 }
 
-def calculate_price_target_statistics(cursor, closing_price_dict):
+def calculate_price_target_statistics(cursor):
     query = f"""
         SELECT 
             r.ticker,
@@ -34,7 +34,7 @@ def calculate_price_target_statistics(cursor, closing_price_dict):
             AVG(CASE WHEN a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS avg_high_success_analysts,
             COUNT(DISTINCT CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.analyst_name END) AS num_combined_criteria,
             STDDEV(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS stddev_combined_criteria,
-            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN (r.adjusted_pt_current - {closing_price_dict['ticker']}) / {closing_price_dict['ticker']} * 100 ELSE 0 END) AS expected_return_combined_criteria
+            AVG(CASE WHEN r.date >= DATE_SUB(NOW(), INTERVAL {DAYS_RECENT} DAY) AND a.overall_success_rate > {SUCCESS_RATE_THRESHOLD} THEN r.adjusted_pt_current END) AS avg_combined_criteria
         FROM (
             SELECT 
                 ticker,
@@ -53,9 +53,6 @@ def calculate_price_target_statistics(cursor, closing_price_dict):
     """
     cursor.execute(query)
     return cursor.fetchall()
-
-
-
 
 def get_last_closing_price(cursor):
     query = """
@@ -77,11 +74,6 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     closing_price_dict = {price[0]: price[1] for price in closing_prices}
     
     for stats in target_statistics:
-        print(stats)  # Debugging: print the content of stats
-        if len(stats) < 16:  # Expecting at least 16 elements
-            print(f"Error: stats tuple has only {len(stats)} elements, skipping this entry.")
-            continue
-
         ticker = stats[0]
         average_price_target = stats[1]
         stddev_price_target = stats[2]
@@ -97,21 +89,33 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
         num_combined_criteria = stats[12]
         stddev_combined_criteria = stats[13]
         avg_combined_criteria = stats[14]
-        expected_return_combined_criteria = stats[15]
         
         last_closing_price = closing_price_dict.get(ticker)
         
         if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
+            days_since_last_update = (datetime.now().date() - last_update_date).days
             
+            expected_return_recent = None
+            if average_price_target_recent is not None:
+                expected_return_recent = ((average_price_target_recent - last_closing_price) / last_closing_price) * 100
+
+            expected_return_high_success = None
+            if avg_high_success_analysts is not None:
+                expected_return_high_success = ((avg_high_success_analysts - last_closing_price) / last_closing_price) * 100
+            
+            expected_return_combined_criteria = None
+            if avg_combined_criteria is not None:
+                expected_return_combined_criteria = ((avg_combined_criteria - last_closing_price) / last_closing_price) * 100
+
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
-                                  num_analysts, stddev_price_target, avg_days_since_last_update, 
-                                  num_recent_analysts, stddev_price_target_recent, expected_return_combined_criteria, 
-                                  num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, 
-                                  expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria))
+                                  num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
+                                  num_recent_analysts, stddev_price_target_recent, expected_return_recent,
+                                  num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success,
+                                  num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria))
 
     insert_query = """
-        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_combined_criteria, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
+        INSERT INTO analysis (ticker, last_closing_price, average_price_target, expected_return, num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update, num_recent_analysts, stddev_price_target_recent, expected_return_recent, num_high_success_analysts, stddev_high_success_analysts, avg_high_success_analysts, expected_return_high_success, num_combined_criteria, stddev_combined_criteria, avg_combined_criteria, expected_return_combined_criteria)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE 
             last_closing_price = VALUES(last_closing_price), 
@@ -119,10 +123,11 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             expected_return = VALUES(expected_return),
             num_analysts = VALUES(num_analysts),
             stddev_price_target = VALUES(stddev_price_target),
+            days_since_last_update = VALUES(days_since_last_update),
             avg_days_since_last_update = VALUES(avg_days_since_last_update),
             num_recent_analysts = VALUES(num_recent_analysts),
             stddev_price_target_recent = VALUES(stddev_price_target_recent),
-            expected_return_recent = VALUES(expected_return_combined_criteria),
+            expected_return_recent = VALUES(expected_return_recent),
             num_high_success_analysts = VALUES(num_high_success_analysts),
             stddev_high_success_analysts = VALUES(stddev_high_success_analysts),
             avg_high_success_analysts = VALUES(avg_high_success_analysts),
@@ -134,62 +139,78 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
     """
     cursor.executemany(insert_query, analysis_data)
 
-
 def update_portfolio_table(cursor):
-    cursor.execute("SELECT MAX(date) FROM prices")
+    # Fetch the latest date from the portfolio table
+    cursor.execute("SELECT MAX(date) FROM portfolio")
     latest_date = cursor.fetchone()[0]
 
     if not latest_date:
-        print("No price data available.")
+        print("No portfolio data available.")
         return
 
-    cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (latest_date,))
-    existing_tickers = set(row[0] for row in cursor.fetchall())
-
+    # Calculate the current total value of the portfolio based on the latest stock prices
     cursor.execute("""
+        SELECT p.ticker, p.quantity, a.last_closing_price
+        FROM portfolio p
+        JOIN analysis a ON p.ticker = a.ticker
+        WHERE p.date = %s
+    """, (latest_date,))
+    portfolio_entries = cursor.fetchall()
+
+    total_portfolio_value = sum(entry[1] * entry[2] for entry in portfolio_entries)
+
+    if not total_portfolio_value:
+        print("No value available for reinvestment.")
+        return
+
+    # Get the existing tickers in the portfolio for the latest date
+    existing_tickers = set(entry[0] for entry in portfolio_entries)
+
+    # Select the top 10 tickers by expected_return_combined_criteria from the analysis table
+    cursor.execute(f"""
         SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis
-        WHERE num_combined_criteria >= %s
+        WHERE num_combined_criteria >= {MIN_ANALYSTS}
         ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
-    """, (MIN_ANALYSTS,))
+    """)
     top_tickers = cursor.fetchall()
 
+    # Check if there's a change in the portfolio
     new_tickers = set(ticker for ticker, _, _ in top_tickers)
     if existing_tickers != new_tickers:
-        cursor.execute("""
-            SELECT SUM(total_value) FROM portfolio WHERE date = %s
-        """, (latest_date,))
-        total_value = cursor.fetchone()[0] or 100
-
+        # Rebalance the portfolio by selling everything and reallocating the total value
         portfolio_data = []
-        for ranking, (ticker, expected_return, last_price) in enumerate(top_tickers):
+        investment_per_stock = total_portfolio_value / 10  # Divide the total value among the 10 stocks
+
+        for ranking, (ticker, expected_return_combined_criteria, last_price) in enumerate(top_tickers):
             if last_price and last_price > 0:
-                quantity = (total_value / 10) / last_price
-                total_value_stock = quantity * last_price
+                quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
+                total_value = quantity * last_price  # Calculate the total value of the investment in this stock
             else:
                 quantity = 0
-                total_value_stock = 0
+                total_value = 0
 
-            portfolio_data.append((latest_date, ranking + 1, ticker, quantity, total_value_stock))
+            portfolio_data.append((latest_date, ranking + 1, ticker, quantity, total_value))
 
+        # Clear previous entries for the current date
         cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
         cursor.executemany("""
             INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
             VALUES (%s, %s, %s, %s, %s)
         """, portfolio_data)
 
+# Script execution
 try:
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
+    target_statistics = calculate_price_target_statistics(cursor)
     closing_prices = get_last_closing_price(cursor)
-    closing_price_dict = {price[0]: price[1] for price in closing_prices}
-
-    target_statistics = calculate_price_target_statistics(cursor, closing_price_dict)
 
     calculate_and_insert_analysis(cursor, target_statistics, closing_prices)
 
+    # Update the portfolio table with the top 10 tickers
     update_portfolio_table(cursor)
 
     conn.commit()
