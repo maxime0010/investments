@@ -106,7 +106,25 @@ def calculate_and_insert_analysis(cursor, target_statistics, closing_prices):
             
             expected_return_combined_criteria = None
             if avg_combined_criteria is not None:
-                expected_return_combined_criteria = ((avg_combined_criteria - last_closing_price) / last_closing_price) * 100
+                total_success_weighted_return = 0
+                total_success_rate = 0
+                
+                cursor.execute("""
+                    SELECT r.adjusted_pt_current, a.overall_success_rate
+                    FROM ratings r
+                    JOIN analysts a ON r.analyst_name = a.name_full
+                    WHERE r.ticker = %s AND r.date >= DATE_SUB(NOW(), INTERVAL %s DAY) AND a.overall_success_rate > %s
+                """, (ticker, DAYS_RECENT, SUCCESS_RATE_THRESHOLD))
+                
+                combined_ratings = cursor.fetchall()
+                
+                for pt_current, success_rate in combined_ratings:
+                    if pt_current and success_rate:
+                        total_success_weighted_return += (success_rate / 100) * ((pt_current - last_closing_price) / last_closing_price) * 100
+                        total_success_rate += success_rate / 100
+
+                if total_success_rate > 0:
+                    expected_return_combined_criteria = total_success_weighted_return / total_success_rate
 
             analysis_data.append((ticker, last_closing_price, average_price_target, expected_return, 
                                   num_analysts, stddev_price_target, days_since_last_update, avg_days_since_last_update,
@@ -148,13 +166,14 @@ def update_portfolio_table(cursor):
         print("No price data available.")
         return
 
-    # Calculate the total value of the current portfolio
-    cursor.execute("SELECT SUM(total_value) FROM portfolio WHERE date = %s", (latest_date,))
-    total_portfolio_value = cursor.fetchone()[0] or 100  # Default to 100 if the portfolio is empty
-
     # Get the existing tickers in the portfolio for the latest date
-    cursor.execute("SELECT ticker FROM portfolio WHERE date = %s", (latest_date,))
-    existing_tickers = set(row[0] for row in cursor.fetchall())
+    cursor.execute("SELECT ticker, total_value FROM portfolio WHERE date = %s", (latest_date,))
+    existing_portfolio = cursor.fetchall()
+    total_investment = sum(row[1] for row in existing_portfolio)
+
+    # If no existing portfolio, set the investment to 100
+    if total_investment == 0:
+        total_investment = 100
 
     # Select the top 10 tickers by expected return from the analysis table
     cursor.execute("""
@@ -167,11 +186,12 @@ def update_portfolio_table(cursor):
 
     # Check if there's a change in the portfolio
     new_tickers = set(ticker for ticker, _, _ in top_tickers)
+    existing_tickers = set(row[0] for row in existing_portfolio)
+
     if existing_tickers != new_tickers:
         # Rebalance the portfolio by selling everything and reallocating
         portfolio_data = []
-        investment_per_stock = total_portfolio_value / 10  # Divide the total portfolio value by 10
-
+        investment_per_stock = total_investment / 10  # Allocate evenly among 10 stocks
         for ranking, (ticker, expected_return, last_price) in enumerate(top_tickers):
             if last_price and last_price > 0:
                 quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
