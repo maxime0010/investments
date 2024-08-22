@@ -17,75 +17,70 @@ db_config = {
     'port': 25060
 }
 
-def update_portfolio_table(cursor):
-    # Fetch the latest date from the portfolio table
-    cursor.execute("SELECT MAX(date) FROM portfolio")
-    latest_date = cursor.fetchone()[0]
+def get_latest_closing_date(cursor):
+    cursor.execute("SELECT MAX(date) FROM prices")
+    return cursor.fetchone()[0]
 
-    if not latest_date:
-        print("No portfolio data available.")
-        return
+def get_existing_portfolio(cursor, date):
+    cursor.execute("SELECT ticker, quantity FROM portfolio WHERE date = %s", (date,))
+    return cursor.fetchall()
 
-    # Calculate the current total value of the portfolio based on the latest stock prices
-    cursor.execute("""
-        SELECT p.ticker, p.quantity, a.last_closing_price
-        FROM portfolio p
-        JOIN analysis a ON p.ticker = a.ticker
-        WHERE p.date = %s
-    """, (latest_date,))
-    portfolio_entries = cursor.fetchall()
+def calculate_total_portfolio_value(portfolio, closing_prices):
+    total_value = 0
+    closing_price_dict = dict(closing_prices)
+    for ticker, quantity in portfolio:
+        total_value += quantity * closing_price_dict.get(ticker, 0)
+    return total_value
 
-    total_portfolio_value = sum(entry[1] * entry[2] for entry in portfolio_entries)
-
-    if not total_portfolio_value:
-        print("No value available for reinvestment.")
-        return
-
-    # Get the existing tickers in the portfolio for the latest date
-    existing_tickers = set(entry[0] for entry in portfolio_entries)
-
-    # Select the top 10 tickers by expected_return_combined_criteria from the analysis table
-    cursor.execute(f"""
-        SELECT ticker, expected_return_combined_criteria, last_closing_price
-        FROM analysis
-        WHERE num_combined_criteria >= {MIN_ANALYSTS}
-        ORDER BY expected_return_combined_criteria DESC
-        LIMIT 10
-    """)
-    top_tickers = cursor.fetchall()
-
-    # Check if there's a change in the portfolio
-    new_tickers = set(ticker for ticker, _, _ in top_tickers)
-    if existing_tickers != new_tickers:
-        # Rebalance the portfolio by selling everything and reallocating the total value
-        portfolio_data = []
-        investment_per_stock = total_portfolio_value / 10  # Divide the total value among the 10 stocks
-
-        for ranking, (ticker, expected_return_combined_criteria, last_price) in enumerate(top_tickers):
-            if last_price and last_price > 0:
-                quantity = investment_per_stock / last_price  # Calculate the number of shares to buy
-                total_value = quantity * last_price  # Calculate the total value of the investment in this stock
-            else:
-                quantity = 0
-                total_value = 0
-
-            portfolio_data.append((latest_date, ranking + 1, ticker, quantity, total_value))
-
-        # Clear previous entries for the current date
-        cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
-        cursor.executemany("""
+def insert_or_update_portfolio(cursor, date, portfolio_data):
+    for data in portfolio_data:
+        cursor.execute("""
             INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
             VALUES (%s, %s, %s, %s, %s)
-        """, portfolio_data)
+            ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), total_value = VALUES(total_value)
+        """, data)
 
-# Script execution
+def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
+    existing_portfolio = get_existing_portfolio(cursor, latest_date)
+    if existing_portfolio:
+        existing_tickers = set(ticker for ticker, _ in existing_portfolio)
+        new_tickers = set(ticker for ticker, _, _ in new_portfolio)
+        if existing_tickers == new_tickers:
+            insert_or_update_portfolio(cursor, latest_date, new_portfolio)
+        else:
+            total_value = calculate_total_portfolio_value(existing_portfolio, closing_prices)
+            new_portfolio_data = []
+            equal_value_per_stock = total_value / 10
+            closing_price_dict = dict(closing_prices)
+            for ranking, (ticker, _, last_price) in enumerate(new_portfolio):
+                quantity = equal_value_per_stock / last_price if last_price else 0
+                total_value_stock = quantity * last_price
+                new_portfolio_data.append((latest_date, ranking + 1, ticker, quantity, total_value_stock))
+            cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
+            insert_or_update_portfolio(cursor, latest_date, new_portfolio_data)
+    else:
+        insert_or_update_portfolio(cursor, latest_date, new_portfolio)
+
+def fetch_new_portfolio(cursor):
+    cursor.execute("""
+        SELECT ticker, expected_return_combined_criteria, last_closing_price
+        FROM analysis
+        WHERE num_combined_criteria >= %s
+        ORDER BY expected_return_combined_criteria DESC
+        LIMIT 10
+    """, (MIN_ANALYSTS,))
+    return cursor.fetchall()
+
+# Execution
 try:
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
+    latest_date = get_latest_closing_date(cursor)
+    closing_prices = get_last_closing_price(cursor)
+    new_portfolio = fetch_new_portfolio(cursor)
 
-    # Update the portfolio table with the top 10 tickers
-    update_portfolio_table(cursor)
+    update_portfolio(cursor, latest_date, new_portfolio, closing_prices)
 
     conn.commit()
     cursor.close()
