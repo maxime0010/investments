@@ -61,20 +61,6 @@ db_config = {
     'port': 25060
 }
 
-def add_website_column():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        cursor.execute("ALTER TABLE prices ADD COLUMN IF NOT EXISTS website VARCHAR(255)")
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("Website column added successfully.")
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
 def insert_price_data(price_data):
     try:
         conn = mysql.connector.connect(**db_config)
