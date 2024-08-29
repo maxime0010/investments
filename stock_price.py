@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import mysql.connector
+from datetime import datetime  # Import the datetime module
 
 # Retrieve API key from environment variables
 marketdata_api_key = os.getenv("MARKETDATA_API")
