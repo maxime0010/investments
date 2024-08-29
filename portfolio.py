@@ -81,6 +81,7 @@ def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
     else:
         insert_or_update_portfolio(cursor, latest_date, new_portfolio)
 
+
 def fetch_new_portfolio(cursor):
     cursor.execute("""
         SELECT ticker, expected_return_combined_criteria, last_closing_price
