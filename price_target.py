@@ -42,7 +42,17 @@ def insert_rating_data(rating_data, cursor):
                       "VALUES (%(id)s, %(action_company)s, %(action_pt)s, %(adjusted_pt_current)s, %(adjusted_pt_prior)s, "
                       "%(analyst)s, %(analyst_name)s, %(currency)s, %(date)s, %(exchange)s, %(importance)s, %(name)s, "
                       "%(notes)s, %(pt_current)s, %(pt_prior)s, %(rating_current)s, %(rating_prior)s, %(ticker)s, "
-                      "%(time)s, %(updated)s, %(url)s, %(url_calendar)s, %(url_news)s)")
+                      "%(time)s, %(updated)s, %(url)s, %(url_calendar)s, %(url_news)s) "
+                      "ON DUPLICATE KEY UPDATE "
+                      "action_company = VALUES(action_company), action_pt = VALUES(action_pt), "
+                      "adjusted_pt_current = VALUES(adjusted_pt_current), adjusted_pt_prior = VALUES(adjusted_pt_prior), "
+                      "analyst = VALUES(analyst), analyst_name = VALUES(analyst_name), currency = VALUES(currency), "
+                      "date = VALUES(date), exchange = VALUES(exchange), importance = VALUES(importance), "
+                      "name = VALUES(name), notes = VALUES(notes), pt_current = VALUES(pt_current), "
+                      "pt_prior = VALUES(pt_prior), rating_current = VALUES(rating_current), "
+                      "rating_prior = VALUES(rating_prior), ticker = VALUES(ticker), time = VALUES(time), "
+                      "updated = VALUES(updated), url = VALUES(url), url_calendar = VALUES(url_calendar), "
+                      "url_news = VALUES(url_news)")
 
         for rating in rating_data["ratings"]:
             # Ensure correct data types
@@ -51,8 +61,12 @@ def insert_rating_data(rating_data, cursor):
             rating["pt_current"] = float(rating["pt_current"]) if rating["pt_current"] else None
             rating["pt_prior"] = float(rating["pt_prior"]) if rating["pt_prior"] else None
 
-            cursor.execute(add_rating, rating)
-            added_ratings += 1
+            try:
+                cursor.execute(add_rating, rating)
+                added_ratings += 1
+            except mysql.connector.IntegrityError as dup_err:
+                # Handle duplicate entry error and continue with the next record
+                print(f"Duplicate entry found: {dup_err}. Continuing to next rating.")
 
         return added_ratings
 
@@ -61,6 +75,7 @@ def insert_rating_data(rating_data, cursor):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
     return added_ratings
+
 
 def fetch_and_store_ratings(tickers, batch_size=50):
     tickers_managed = 0
