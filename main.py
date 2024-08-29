@@ -1,11 +1,13 @@
 import subprocess
 
 def run_script(script_name):
+    print(f"Running {script_name}...")
     try:
         subprocess.run(["python", script_name], check=True)
     except subprocess.CalledProcessError as e:
         print(f"Error running {script_name}: {e}")
         exit(1)
+
 
 # Execute the scripts in the specified order
 run_script("price_target.py")
