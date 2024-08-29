@@ -10,7 +10,7 @@ if not token:
 
 bz = financial_data.Benzinga(token)
 
-# List of S&P 500 tickers
+# List of S&P 500 tickers (as provided)
 sp500_tickers = [
     'MMM', 'AOS', 'ABT', 'ABBV', 'ACN', 'ADBE', 'AMD', 'AES', 'AFL', 'A', 'APD', 'ABNB', 'AKAM', 'ALB', 'ARE', 'ALGN', 'ALLE', 
     'LNT', 'ALL', 'GOOGL', 'GOOG', 'MO', 'AMZN', 'AMCR', 'AEE', 'AAL', 'AEP', 'AXP', 'AIG', 'AMT', 'AWK', 'AMP', 'AME', 'AMGN', 
@@ -43,7 +43,6 @@ sp500_tickers = [
     'WM', 'WAT', 'WEC', 'WFC', 'WELL', 'WST', 'WDC', 'WY', 'WMB', 'WTW', 'WYNN', 'XEL', 'XYL', 'YUM', 'ZBRA', 'ZBH', 'ZTS'
 ]
 
-
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
 if not mdp:
@@ -61,10 +60,9 @@ db_config = {
     'port': 25060
 }
 
-def insert_rating_data(rating_data):
+def insert_rating_data(rating_data, cursor):
+    added_ratings = 0
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
         add_rating = ("INSERT INTO ratings "
                       "(id, action_company, action_pt, adjusted_pt_current, adjusted_pt_prior, analyst, analyst_name, "
                       "currency, date, exchange, importance, name, notes, pt_current, pt_prior, rating_current, "
@@ -82,23 +80,51 @@ def insert_rating_data(rating_data):
             rating["pt_prior"] = float(rating["pt_prior"]) if rating["pt_prior"] else None
 
             cursor.execute(add_rating, rating)
+            added_ratings += 1
 
-        conn.commit()
-        cursor.close()
-        conn.close()
+        return added_ratings
+
     except mysql.connector.Error as err:
         print(f"Error: {err}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+    return added_ratings
 
 def fetch_and_store_ratings(tickers, batch_size=50):
-    for i in range(0, len(tickers), batch_size):
-        batch = tickers[i:i + batch_size]
-        params = {'company_tickers': ','.join(batch)}
+    tickers_managed = 0
+    total_ratings_found = 0
+    total_ratings_added = 0
 
-        rating = bz.ratings(**params)
-        print(bz.output(rating))
-        insert_rating_data(rating)
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+
+        for i in range(0, len(tickers), batch_size):
+            batch = tickers[i:i + batch_size]
+            tickers_managed += len(batch)
+
+            params = {'company_tickers': ','.join(batch)}
+            rating = bz.ratings(**params)
+            ratings_found = len(rating.get("ratings", []))
+            total_ratings_found += ratings_found
+
+            if ratings_found > 0:
+                ratings_added = insert_rating_data(rating, cursor)
+                total_ratings_added += ratings_added
+
+            print(f"Processed batch: {batch}. Ratings found: {ratings_found}. Ratings added: {ratings_added}.")
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    # Final logging
+    print(f"Tickers managed: {tickers_managed}")
+    print(f"Total ratings found: {total_ratings_found}")
+    print(f"Total ratings added to database: {total_ratings_added}")
 
 def exit_program():
     print("Exiting the program...")
