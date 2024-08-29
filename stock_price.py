@@ -13,8 +13,6 @@ token = os.getenv("BENZINGA_API_KEY")
 if not token:
     raise ValueError("No API key found in environment variables")
 
-bz = financial_data.Benzinga(token)
-
 # List of S&P 500 tickers
 sp500_tickers = [
     'MMM', 'AOS', 'ABT', 'ABBV', 'ACN', 'ADBE', 'AMD', 'AES', 'AFL', 'A', 'APD', 'ABNB', 'AKAM', 'ALB', 'ARE', 'ALGN', 'ALLE', 
