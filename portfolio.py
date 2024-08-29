@@ -52,14 +52,15 @@ def calculate_total_portfolio_value(portfolio, closing_prices):
 
 def insert_or_update_portfolio(cursor, date, portfolio_data):
     for data in portfolio_data:
-        # Ensure there are exactly 5 elements in the data tuple, filling with None if missing
-        data = tuple(list(data) + [None] * (5 - len(data)))
-        print(f"Executing SQL with data: {data}")  # Debugging statement
+        # Ensure correct data order: (date, ranking, ticker, quantity, total_value)
+        data_tuple = (date,) + tuple(data[:4])  # date is first, followed by the first 4 elements of data
+        data_tuple = tuple(list(data_tuple) + [None] * (5 - len(data_tuple)))  # Ensure 5 elements
+        print(f"Executing SQL with data: {data_tuple}")  # Debugging statement
         cursor.execute("""
             INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
             VALUES (%s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), total_value = VALUES(total_value)
-        """, data)
+        """, data_tuple)
 
 def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
     existing_portfolio = get_existing_portfolio(cursor, latest_date)
