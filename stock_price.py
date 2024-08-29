@@ -114,7 +114,6 @@ def exit_program():
 
 # Script execution
 try:
-    add_website_column()  # Ensure the website column exists
     fetch_and_store_prices(sp500_tickers)
     exit_program()
 except Exception as e:
