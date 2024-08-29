@@ -10,7 +10,7 @@ if not mdp:
 host = os.getenv("MYSQL_HOST")
 if not host:
     raise ValueError("No Host found in environment variables")
-    
+
 # Database connection configuration
 db_config = {
     'user': 'doadmin',
@@ -67,29 +67,33 @@ def insert_or_update_portfolio(cursor, date, portfolio_data):
             ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), total_value = VALUES(total_value)
         """, data_tuple)
 
-
 def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
     existing_portfolio = get_existing_portfolio(cursor, latest_date)
+    closing_price_dict = dict(closing_prices)
+
     if existing_portfolio:
         existing_tickers = set(ticker for ticker, _ in existing_portfolio)
         new_tickers = set(ticker for ticker, _, _ in new_portfolio)
+        
         if existing_tickers == new_tickers:
             insert_or_update_portfolio(cursor, latest_date, new_portfolio)
         else:
             total_value = calculate_total_portfolio_value(existing_portfolio, closing_prices)
+            equal_value_per_stock = total_value / len(new_portfolio)
             new_portfolio_data = []
-            equal_value_per_stock = total_value / 10
-            closing_price_dict = dict(closing_prices)
-            for ranking, (ticker, _, last_price) in enumerate(new_portfolio):
+
+            for ranking, (ticker, _, last_price) in enumerate(new_portfolio, start=1):
                 quantity = equal_value_per_stock / last_price if last_price else 0
                 total_value_stock = quantity * last_price
-                new_portfolio_data.append((ranking + 1, ticker, quantity, total_value_stock))
+                new_portfolio_data.append((ranking, ticker, quantity, total_value_stock))
+            
             cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
             insert_or_update_portfolio(cursor, latest_date, new_portfolio_data)
     else:
-        insert_or_update_portfolio(cursor, latest_date, new_portfolio)
-
-
+        new_portfolio_data = []
+        for ranking, (ticker, _, last_price) in enumerate(new_portfolio, start=1):
+            new_portfolio_data.append((ranking, ticker, None, None))
+        insert_or_update_portfolio(cursor, latest_date, new_portfolio_data)
 
 def fetch_new_portfolio(cursor):
     cursor.execute("""
