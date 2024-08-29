@@ -24,6 +24,21 @@ def get_latest_closing_date(cursor):
     cursor.execute("SELECT MAX(date) FROM prices")
     return cursor.fetchone()[0]
 
+def get_last_closing_price(cursor):
+    query = """
+        SELECT 
+            ticker,
+            close AS last_closing_price
+        FROM prices
+        WHERE (ticker, date) IN (
+            SELECT ticker, MAX(date) 
+            FROM prices 
+            GROUP BY ticker
+        )
+    """
+    cursor.execute(query)
+    return cursor.fetchall()
+
 def get_existing_portfolio(cursor, date):
     cursor.execute("SELECT ticker, quantity FROM portfolio WHERE date = %s", (date,))
     return cursor.fetchall()
