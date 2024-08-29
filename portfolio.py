@@ -76,11 +76,13 @@ def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
             for ranking, (ticker, _, last_price) in enumerate(new_portfolio):
                 quantity = equal_value_per_stock / last_price if last_price else 0
                 total_value_stock = quantity * last_price
-                new_portfolio_data.append((latest_date, ranking + 1, ticker, quantity, total_value_stock))
+                # Construct the tuple in the correct order
+                new_portfolio_data.append((ranking + 1, ticker, quantity, total_value_stock))
             cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
             insert_or_update_portfolio(cursor, latest_date, new_portfolio_data)
     else:
         insert_or_update_portfolio(cursor, latest_date, new_portfolio)
+
 
 def fetch_new_portfolio(cursor):
     cursor.execute("""
