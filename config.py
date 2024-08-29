@@ -1,3 +1,3 @@
-DAYS_RECENT = 21  # Number of days to define "recent"
-SUCCESS_RATE_THRESHOLD = 0  # Threshold for analysts' success rate
+DAYS_RECENT = 30  # Number of days to define "recent"
+SUCCESS_RATE_THRESHOLD = 30  # Threshold for analysts' success rate
 MIN_ANALYSTS = 3  # Minimum number of analysts covering a stock
