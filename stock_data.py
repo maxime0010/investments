@@ -1,14 +1,30 @@
 import os
 import sys
 import mysql.connector
-from benzinga import financial_data
+import requests
 
 # Retrieve API key from environment variables
-token = os.getenv("BENZINGA_API_KEY")
-if not token:
-    raise ValueError("No API key found in environment variables")
+alpha_api_key = os.getenv("ALPHA_API")
+if not alpha_api_key:
+    raise ValueError("No Alpha Vantage API key found in environment variables")
 
-bz = financial_data.Benzinga(token)
+# Retrieve MySQL password and host from environment variables
+mdp = os.getenv("MYSQL_MDP")
+if not mdp:
+    raise ValueError("No MySQL password found in environment variables")
+host = os.getenv("MYSQL_HOST")
+if not host:
+    raise ValueError("No Host found in environment variables")
+    
+# Database connection configuration
+db_config = {
+    'user': 'doadmin',
+    'password': mdp,
+    'host': host,
+    'database': 'defaultdb',
+    'port': 25060
+}
+
 
 # List of S&P 500 tickers
 sp500_tickers = [    
@@ -44,46 +60,6 @@ sp500_tickers = [
 
 ]
 
-# Retrieve MySQL password from environment variables
-mdp = os.getenv("MYSQL_MDP")
-if not mdp:
-    raise ValueError("No MySQL password found in environment variables")
-host = os.getenv("MYSQL_HOST")
-if not host:
-    raise ValueError("No Host found in environment variables")
-    
-# Database connection configuration
-db_config = {
-    'user': 'doadmin',
-    'password': mdp,
-    'host': host,
-    'database': 'defaultdb',
-    'port': 25060
-}
-
-def create_stock_table():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        
-        # Create the stock table with the specified columns
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS stock (
-            ticker VARCHAR(10) PRIMARY KEY,
-            name VARCHAR(255),
-            indices VARCHAR(255),
-            website VARCHAR(255)
-        )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("Stock table created successfully.")
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
 def insert_stock_data(stock_data):
     try:
         conn = mysql.connector.connect(**db_config)
@@ -105,25 +81,39 @@ def insert_stock_data(stock_data):
         print(f"An unexpected error occurred: {e}")
 
 def fetch_and_store_stock_data(tickers):
+    base_url = "https://www.alphavantage.co/query"
     stock_data = []
+
     for ticker in tickers:
         try:
-            profile = bz.company_profile(ticker)
-            if profile:
+            params = {
+                "function": "OVERVIEW",
+                "symbol": ticker,
+                "apikey": alpha_api_key
+            }
+            response = requests.get(base_url, params=params)
+            response.raise_for_status()
+            profile = response.json()
+
+            if profile and "Name" in profile:
                 stock_data.append({
                     'ticker': ticker,
-                    'name': profile.get('name'),
-                    'indices': 'S&P 500',  # Example index; modify as necessary
-                    'website': profile.get('website')
+                    'name': profile.get('Name'),
+                    'indices': None,  # Leave indices empty
+                    'website': profile.get('Website')
                 })
                 print(f"Fetched and prepared data for {ticker}")
             else:
                 print(f"No profile data found for {ticker}.")
+        
+        except requests.exceptions.HTTPError as http_err:
+            print(f"HTTP error occurred for ticker {ticker}: {http_err}")
         except Exception as e:
             print(f"Error fetching company profile for {ticker}: {e}")
     
     if stock_data:
         insert_stock_data(stock_data)
+
 
 def exit_program():
     print("Exiting the program...")

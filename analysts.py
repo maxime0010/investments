@@ -100,3 +100,4 @@ if analyst_names:
 conn.commit()
 cursor.close()
 conn.close()
+
