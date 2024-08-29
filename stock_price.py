@@ -1,7 +1,12 @@
 import os
 import sys
 import mysql.connector
-from benzinga import financial_data
+import requests
+
+# Retrieve API key from environment variables
+alpha_api_key = os.getenv("ALPHA_API")
+if not alpha_api_key:
+    raise ValueError("No Alpha Vantage API key found in environment variables")
 
 # Retrieve API key from environment variables
 token = os.getenv("BENZINGA_API_KEY")
@@ -80,37 +85,53 @@ def insert_price_data(price_data):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def fetch_and_store_prices(tickers, batch_size=50):
+def fetch_and_store_prices(tickers, batch_size=5):
+    base_url = "https://www.alphavantage.co/query"
+    
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
-        params = {'company_tickers': ','.join(batch)}
-        
-        try:
-            quotes = bz.delayed_quote(**params)
-            if quotes:
-                print(f"Fetched data for batch: {batch}")
-                print(bz.output(quotes))
-                price_data = []
-                for quote in quotes['quotes']:
-                    ticker = quote['security']['symbol']
-                    profile = bz.company_profile(ticker)
-                    website = profile.get('website') if profile else None
+        price_data = []
+
+        for ticker in batch:
+            params = {
+                "function": "TIME_SERIES_DAILY",
+                "symbol": ticker,
+                "outputsize": "compact",
+                "datatype": "json",
+                "apikey": alpha_api_key
+            }
+            
+            try:
+                response = requests.get(base_url, params=params)
+                response.raise_for_status()
+                data = response.json()
+
+                if "Time Series (Daily)" in data:
+                    time_series = data["Time Series (Daily)"]
+                    latest_date = next(iter(time_series))  # Get the latest date
+                    latest_data = time_series[latest_date]
                     
                     price_data.append({
                         'ticker': ticker,
-                        'date': quote['quote']['date'][:10],  # Extracting the date part from the datetime
-                        'close': quote['quote']['last'],
-                        'website': website
+                        'date': latest_date,
+                        'close': float(latest_data['4. close']),
+                        'website': None  # Replace with actual website if available
                     })
-                insert_price_data(price_data)
-            else:
-                print(f"No data returned for batch: {batch}")
-        except Exception as e:
-            print(f"Error fetching prices for batch {batch}: {e}")
+                else:
+                    print(f"No data returned for ticker: {ticker}")
+            
+            except requests.exceptions.HTTPError as http_err:
+                print(f"HTTP error occurred for ticker {ticker}: {http_err}")
+            except Exception as e:
+                print(f"An error occurred for ticker {ticker}: {e}")
+        
+        if price_data:
+            insert_price_data(price_data)
 
 def exit_program():
     print("Exiting the program...")
     sys.exit(0)
+
 
 # Script execution
 try:
