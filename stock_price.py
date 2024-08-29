@@ -1,17 +1,29 @@
 import os
 import sys
-import mysql.connector
 import requests
+import mysql.connector
 
 # Retrieve API key from environment variables
-alpha_api_key = os.getenv("ALPHA_API")
-if not alpha_api_key:
-    raise ValueError("No Alpha Vantage API key found in environment variables")
+marketdata_api_key = os.getenv("MARKETDATA_API")
+if not marketdata_api_key:
+    raise ValueError("No MarketData.app API key found in environment variables")
 
-# Retrieve API key from environment variables
-token = os.getenv("BENZINGA_API_KEY")
-if not token:
-    raise ValueError("No API key found in environment variables")
+# Retrieve MySQL password and host from environment variables
+mdp = os.getenv("MYSQL_MDP")
+if not mdp:
+    raise ValueError("No MySQL password found in environment variables")
+host = os.getenv("MYSQL_HOST")
+if not host:
+    raise ValueError("No Host found in environment variables")
+
+# Database connection configuration
+db_config = {
+    'user': 'doadmin',
+    'password': mdp,
+    'host': host,
+    'database': 'defaultdb',
+    'port': 25060
+}
 
 # List of S&P 500 tickers
 sp500_tickers = [
@@ -47,30 +59,13 @@ sp500_tickers = [
 
 ]
 
-# Retrieve MySQL password from environment variables
-mdp = os.getenv("MYSQL_MDP")
-if not mdp:
-    raise ValueError("No MySQL password found in environment variables")
-host = os.getenv("MYSQL_HOST")
-if not host:
-    raise ValueError("No Host found in environment variables")
-    
-# Database connection configuration
-db_config = {
-    'user': 'doadmin',
-    'password': mdp,
-    'host': host,
-    'database': 'defaultdb',
-    'port': 25060
-}
-
 def insert_price_data(price_data):
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        add_price = ("INSERT INTO prices (ticker, date, close, website) "
-                     "VALUES (%(ticker)s, %(date)s, %(close)s, %(website)s) "
-                     "ON DUPLICATE KEY UPDATE close = VALUES(close), website = VALUES(website)")
+        add_price = ("INSERT INTO prices (ticker, date, close) "
+                     "VALUES (%(ticker)s, %(date)s, %(close)s) "
+                     "ON DUPLICATE KEY UPDATE close = VALUES(close)")
 
         for price in price_data:
             cursor.execute(add_price, price)
@@ -83,53 +78,44 @@ def insert_price_data(price_data):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-def fetch_and_store_prices(tickers, batch_size=5):
-    base_url = "https://www.alphavantage.co/query"
+def fetch_and_store_prices(tickers):
+    base_url = "https://api.marketdata.app/v1/stocks/bulkquotes/"
+    symbols = ','.join(tickers)
+    price_data = []
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {marketdata_api_key}"
+        }
+        params = {
+            "symbols": symbols
+        }
+        response = requests.get(base_url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        if data["s"] == "ok":
+            for idx, ticker in enumerate(data["symbol"]):
+                price_data.append({
+                    'ticker': ticker,
+                    'date': data['updated'][idx],  # Use the provided updated timestamp
+                    'close': data['last'][idx]
+                })
+            print(f"Fetched and prepared data for {len(tickers)} tickers.")
+        else:
+            print(f"No data returned for tickers: {tickers}")
     
-    for i in range(0, len(tickers), batch_size):
-        batch = tickers[i:i + batch_size]
-        price_data = []
-
-        for ticker in batch:
-            params = {
-                "function": "TIME_SERIES_DAILY",
-                "symbol": ticker,
-                "outputsize": "compact",
-                "datatype": "json",
-                "apikey": alpha_api_key
-            }
-            
-            try:
-                response = requests.get(base_url, params=params)
-                response.raise_for_status()
-                data = response.json()
-
-                if "Time Series (Daily)" in data:
-                    time_series = data["Time Series (Daily)"]
-                    latest_date = next(iter(time_series))  # Get the latest date
-                    latest_data = time_series[latest_date]
-                    
-                    price_data.append({
-                        'ticker': ticker,
-                        'date': latest_date,
-                        'close': float(latest_data['4. close']),
-                        'website': None  # Replace with actual website if available
-                    })
-                else:
-                    print(f"No data returned for ticker: {ticker}")
-            
-            except requests.exceptions.HTTPError as http_err:
-                print(f"HTTP error occurred for ticker {ticker}: {http_err}")
-            except Exception as e:
-                print(f"An error occurred for ticker {ticker}: {e}")
-        
-        if price_data:
-            insert_price_data(price_data)
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred for tickers {tickers}: {http_err}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    
+    if price_data:
+        insert_price_data(price_data)
 
 def exit_program():
     print("Exiting the program...")
     sys.exit(0)
-
 
 # Script execution
 try:
