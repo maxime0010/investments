@@ -61,29 +61,6 @@ db_config = {
     'port': 25060
 }
 
-def create_stock_table():
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        
-        # Create the stock table with the specified columns
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS stock (
-            ticker VARCHAR(10) PRIMARY KEY,
-            name VARCHAR(255),
-            indices VARCHAR(255),
-            website VARCHAR(255)
-        )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("Stock table created successfully.")
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
 def insert_stock_data(stock_data):
     try:
         conn = mysql.connector.connect(**db_config)
