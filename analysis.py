@@ -7,12 +7,15 @@ from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 mdp = os.getenv("MYSQL_MDP")
 if not mdp:
     raise ValueError("No MySQL password found in environment variables")
-
+host = os.getenv("MYSQL_HOST")
+if not host:
+    raise ValueError("No Host found in environment variables")
+    
 # Database connection configuration
 db_config = {
     'user': 'doadmin',
     'password': mdp,
-    'host': 'db-mysql-nyc3-03005-do-user-4526552-0.h.db.ondigitalocean.com',
+    'host': host,
     'database': 'defaultdb',
     'port': 25060
 }
