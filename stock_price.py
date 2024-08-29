@@ -96,9 +96,13 @@ def fetch_and_store_prices(tickers):
 
         if data["s"] == "ok":
             for idx, ticker in enumerate(data["symbol"]):
+                # Convert Unix timestamp to date
+                timestamp = int(data['updated'][idx])
+                date = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d')
+
                 price_data.append({
                     'ticker': ticker,
-                    'date': data['updated'][idx],  # Use the provided updated timestamp
+                    'date': date,  # Use the converted date
                     'close': data['last'][idx]
                 })
             print(f"Fetched and prepared data for {len(tickers)} tickers.")
