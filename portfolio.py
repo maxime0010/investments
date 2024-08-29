@@ -53,14 +53,20 @@ def calculate_total_portfolio_value(portfolio, closing_prices):
 def insert_or_update_portfolio(cursor, date, portfolio_data):
     for data in portfolio_data:
         # Ensure correct data order: (date, ranking, ticker, quantity, total_value)
-        data_tuple = (date,) + tuple(data[:4])  # date is first, followed by the first 4 elements of data
-        data_tuple = tuple(list(data_tuple) + [None] * (5 - len(data_tuple)))  # Ensure 5 elements
+        data_tuple = (
+            date,                # First value: date
+            data[0],             # Second value: ranking
+            data[1],             # Third value: ticker
+            data[2] if len(data) > 2 else None,  # Fourth value: quantity
+            data[3] if len(data) > 3 else None   # Fifth value: total_value
+        )
         print(f"Executing SQL with data: {data_tuple}")  # Debugging statement
         cursor.execute("""
             INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
             VALUES (%s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), total_value = VALUES(total_value)
         """, data_tuple)
+
 
 def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
     existing_portfolio = get_existing_portfolio(cursor, latest_date)
@@ -77,12 +83,12 @@ def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
             for ranking, (ticker, _, last_price) in enumerate(new_portfolio):
                 quantity = equal_value_per_stock / last_price if last_price else 0
                 total_value_stock = quantity * last_price
-                # Construct the tuple in the correct order
                 new_portfolio_data.append((ranking + 1, ticker, quantity, total_value_stock))
             cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
             insert_or_update_portfolio(cursor, latest_date, new_portfolio_data)
     else:
         insert_or_update_portfolio(cursor, latest_date, new_portfolio)
+
 
 
 def fetch_new_portfolio(cursor):
