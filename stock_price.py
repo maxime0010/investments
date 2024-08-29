@@ -8,10 +8,6 @@ token = os.getenv("BENZINGA_API_KEY")
 if not token:
     raise ValueError("No API key found in environment variables")
 
-mdp = os.getenv("MYSQL_MDP")
-if not mdp:
-    raise ValueError("No MySQL password found in environment variables")
-
 bz = financial_data.Benzinga(token)
 
 # List of S&P 500 tickers
@@ -48,11 +44,19 @@ sp500_tickers = [
 
 ]
 
+# Retrieve MySQL password from environment variables
+mdp = os.getenv("MYSQL_MDP")
+if not mdp:
+    raise ValueError("No MySQL password found in environment variables")
+host = os.getenv("MYSQL_HOST")
+if not host:
+    raise ValueError("No Host found in environment variables")
+    
 # Database connection configuration
 db_config = {
     'user': 'doadmin',
     'password': mdp,
-    'host': 'db-mysql-nyc3-03005-do-user-4526552-0.h.db.ondigitalocean.com',
+    'host': host,
     'database': 'defaultdb',
     'port': 25060
 }
