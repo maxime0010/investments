@@ -52,11 +52,13 @@ def calculate_total_portfolio_value(portfolio, closing_prices):
 
 def insert_or_update_portfolio(cursor, date, portfolio_data):
     for data in portfolio_data:
+        print(f"Executing SQL with data: {data}")  # Debugging statement
         cursor.execute("""
             INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
             VALUES (%s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), total_value = VALUES(total_value)
         """, data)
+
 
 def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
     existing_portfolio = get_existing_portfolio(cursor, latest_date)
