@@ -4,5 +4,3 @@ requests
 six
 python-dotenv
 mysql-connector-python
-beautifulsoup4
-selenium
