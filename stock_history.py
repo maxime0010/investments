@@ -1,16 +1,10 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 import os
 import time
-import requests
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 
-# List of tickers
-tickers = [
-    'MMM', 'AOS', 'ABT', 'ABBV', 'ACN', 'ADBE', 'AMD', 'AES', 'AFL', 'A', 'APD', 
-    # ... (rest of your tickers)
-]
+# List of tickers (example)
+tickers = ['MMM', 'AOS', 'ABT', 'ABBV', 'ACN', 'ADBE', 'AMD']
 
 # Set up the download directory and Chrome options
 download_dir = "historical_data"
@@ -22,8 +16,8 @@ prefs = {"download.default_directory": os.path.abspath(download_dir)}
 chrome_options.add_experimental_option("prefs", prefs)
 chrome_options.add_argument("--headless")  # Run in headless mode (no browser window)
 
-# Set up the WebDriver (ensure chromedriver is in your PATH or provide the path here)
-driver = webdriver.Chrome(service=Service("/path/to/chromedriver"), options=chrome_options)
+# Set up the WebDriver (use executable_path to specify the path to chromedriver)
+driver = webdriver.Chrome(executable_path="/path/to/chromedriver", options=chrome_options)
 
 # Iterate over each ticker and download the historical data
 for ticker in tickers:
@@ -35,7 +29,7 @@ for ticker in tickers:
         time.sleep(5)  # Adjust as necessary based on your connection speed
 
         # Click on the "Download historical data" button
-        download_button = driver.find_element(By.XPATH, "//a[contains(text(), 'Download Data')]")
+        download_button = driver.find_element_by_xpath("//a[contains(text(), 'Download Data')]")
         download_button.click()
 
         # Wait for the download to complete
