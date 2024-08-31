@@ -1,6 +1,7 @@
 import os
 import sys
 import mysql.connector
+from datetime import datetime, timedelta
 from benzinga import financial_data
 
 # Retrieve API key from environment variables
