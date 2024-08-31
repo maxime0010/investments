@@ -60,6 +60,16 @@ db_config = {
     'port': 25060
 }
 
+def get_oldest_and_newest_rating_dates(cursor, ticker):
+    query = """
+        SELECT MIN(date) AS oldest_date, MAX(date) AS newest_date
+        FROM ratings
+        WHERE ticker = %s
+    """
+    cursor.execute(query, (ticker,))
+    result = cursor.fetchone()
+    return result['oldest_date'], result['newest_date']
+
 def insert_rating_data(rating_data, cursor):
     added_ratings = 0
     try:
@@ -93,7 +103,6 @@ def insert_rating_data(rating_data, cursor):
                 cursor.execute(add_rating, rating)
                 added_ratings += 1
             except mysql.connector.IntegrityError as dup_err:
-                # Handle duplicate entry error and continue with the next record
                 print(f"Duplicate entry found: {dup_err}. Continuing to next rating.")
 
         return added_ratings
@@ -104,30 +113,41 @@ def insert_rating_data(rating_data, cursor):
         print(f"An unexpected error occurred: {e}")
     return added_ratings
 
+def fetch_and_store_ratings_for_ticker(ticker, cursor):
+    today = datetime.today().date()
+    five_years_ago = today - timedelta(days=5*365)
 
-def fetch_and_store_ratings(tickers, batch_size=50):
-    tickers_managed = 0
-    total_ratings_found = 0
-    total_ratings_added = 0
+    oldest_date, newest_date = get_oldest_and_newest_rating_dates(cursor, ticker)
 
+    if oldest_date and oldest_date >= five_years_ago:
+        # Request all ratings between oldest_date and 5 years ago
+        params = {
+            'company_tickers': ticker,
+            'date_from': (oldest_date - timedelta(days=1)).strftime('%Y-%m-%d'),
+            'date_to': five_years_ago.strftime('%Y-%m-%d')
+        }
+        print(f"Fetching data for {ticker} from {params['date_from']} to {params['date_to']}")
+        rating_data = bz.ratings(**params)
+        insert_rating_data(rating_data, cursor)
+
+    if newest_date and newest_date < today:
+        # Request all ratings between newest_date and today
+        params = {
+            'company_tickers': ticker,
+            'date_from': (newest_date + timedelta(days=1)).strftime('%Y-%m-%d'),
+            'date_to': today.strftime('%Y-%m-%d')
+        }
+        print(f"Fetching data for {ticker} from {params['date_from']} to {params['date_to']}")
+        rating_data = bz.ratings(**params)
+        insert_rating_data(rating_data, cursor)
+
+def fetch_and_store_ratings(tickers):
     try:
         conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
-        for i in range(0, len(tickers), batch_size):
-            batch = tickers[i:i + batch_size]
-            tickers_managed += len(batch)
-
-            params = {'company_tickers': ','.join(batch)}
-            rating = bz.ratings(**params)
-            ratings_found = len(rating.get("ratings", []))
-            total_ratings_found += ratings_found
-
-            if ratings_found > 0:
-                ratings_added = insert_rating_data(rating, cursor)
-                total_ratings_added += ratings_added
-
-            print(f"Processed batch: {batch}. Ratings found: {ratings_found}. Ratings added: {ratings_added}.")
+        for ticker in tickers:
+            fetch_and_store_ratings_for_ticker(ticker, cursor)
 
         conn.commit()
         cursor.close()
@@ -135,11 +155,6 @@ def fetch_and_store_ratings(tickers, batch_size=50):
 
     except Exception as e:
         print(f"An error occurred: {e}")
-
-    # Final logging
-    print(f"Tickers managed: {tickers_managed}")
-    print(f"Total ratings found: {total_ratings_found}")
-    print(f"Total ratings added to database: {total_ratings_added}")
 
 def exit_program():
     print("Exiting the program...")
