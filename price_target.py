@@ -66,13 +66,8 @@ def insert_rating_data(rating_data, cursor):
                       "updated = VALUES(updated), url = VALUES(url), url_calendar = VALUES(url_calendar), "
                       "url_news = VALUES(url_news)")
 
-        # Debugging: Print out the structure of rating_data
-        print("Rating Data Structure:", type(rating_data))
-        print("Rating Data Content:", rating_data)
-
-        # Check if 'ratings' is a key in the response
-        if isinstance(rating_data, dict) and "ratings" in rating_data:
-            for rating in rating_data["ratings"]:
+        if isinstance(rating_data, list) and rating_data:  # Check if the list is not empty
+            for rating in rating_data:
                 # Ensure correct data types
                 rating["adjusted_pt_current"] = float(rating["adjusted_pt_current"]) if rating["adjusted_pt_current"] else None
                 rating["adjusted_pt_prior"] = float(rating["adjusted_pt_prior"]) if rating["adjusted_pt_prior"] else None
@@ -85,7 +80,7 @@ def insert_rating_data(rating_data, cursor):
                 except mysql.connector.IntegrityError as dup_err:
                     print(f"Duplicate entry found: {dup_err}. Continuing to next rating.")
         else:
-            print("Unexpected response structure:", rating_data)
+            print("No ratings data returned.")
 
         return added_ratings
 
@@ -102,26 +97,32 @@ def fetch_and_store_ratings_for_ticker(ticker, cursor):
     oldest_date, newest_date = get_oldest_and_newest_rating_dates(cursor, ticker)
 
     if oldest_date and oldest_date >= five_years_ago:
-        # Request all ratings between oldest_date and 5 years ago
-        params = {
-            'company_tickers': ticker,
-            'date_from': (oldest_date - timedelta(days=1)).strftime('%Y-%m-%d'),
-            'date_to': five_years_ago.strftime('%Y-%m-%d')
-        }
-        print(f"Fetching data for {ticker} from {params['date_from']} to {params['date_to']}")
-        rating_data = bz.ratings(**params)
-        insert_rating_data(rating_data, cursor)
+        date_from = max(oldest_date - timedelta(days=1), five_years_ago)
+        date_to = five_years_ago
+        if date_from < date_to:
+            # Request all ratings between oldest_date and 5 years ago
+            params = {
+                'company_tickers': ticker,
+                'date_from': date_from.strftime('%Y-%m-%d'),
+                'date_to': date_to.strftime('%Y-%m-%d')
+            }
+            print(f"Fetching data for {ticker} from {params['date_from']} to {params['date_to']}")
+            rating_data = bz.ratings(**params)
+            insert_rating_data(rating_data, cursor)
 
     if newest_date and newest_date < today:
-        # Request all ratings between newest_date and today
-        params = {
-            'company_tickers': ticker,
-            'date_from': (newest_date + timedelta(days=1)).strftime('%Y-%m-%d'),
-            'date_to': today.strftime('%Y-%m-%d')
-        }
-        print(f"Fetching data for {ticker} from {params['date_from']} to {params['date_to']}")
-        rating_data = bz.ratings(**params)
-        insert_rating_data(rating_data, cursor)
+        date_from = newest_date + timedelta(days=1)
+        date_to = today
+        if date_from <= date_to:
+            # Request all ratings between newest_date and today
+            params = {
+                'company_tickers': ticker,
+                'date_from': date_from.strftime('%Y-%m-%d'),
+                'date_to': date_to.strftime('%Y-%m-%d')
+            }
+            print(f"Fetching data for {ticker} from {params['date_from']} to {params['date_to']}")
+            rating_data = bz.ratings(**params)
+            insert_rating_data(rating_data, cursor)
 
 def fetch_and_store_ratings(tickers):
     try:
