@@ -1,6 +1,7 @@
 import os
 import mysql.connector
 from datetime import datetime
+from decimal import Decimal
 from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 
 # Retrieve MySQL password from environment variables
@@ -57,7 +58,7 @@ def update_existing_portfolio(cursor, today, closing_prices):
     existing_portfolio = cursor.fetchall()
 
     for ticker, quantity, total_value in existing_portfolio:
-        latest_closing_price = closing_price_dict.get(ticker, 0)
+        latest_closing_price = closing_price_dict.get(ticker, Decimal(0))
         if latest_closing_price == 0:
             # Find the most recent non-zero closing price
             cursor.execute("""
@@ -85,11 +86,11 @@ def insert_new_portfolio(cursor, today, new_portfolio, closing_prices):
     closing_price_dict = dict(closing_prices)
 
     cursor.execute("SELECT SUM(total_value_sell) FROM portfolio WHERE date_sell = %s", (today,))
-    aggregated_total_value_sell = cursor.fetchone()[0] or 0
-    equal_value_per_stock = aggregated_total_value_sell / 10
+    aggregated_total_value_sell = cursor.fetchone()[0] or Decimal(0)
+    equal_value_per_stock = aggregated_total_value_sell / Decimal(10)
 
     for ranking, (ticker, expected_return, _) in enumerate(new_portfolio, start=1):
-        last_closing_price = closing_price_dict.get(ticker, 0)
+        last_closing_price = closing_price_dict.get(ticker, Decimal(0))
         if last_closing_price == 0:
             # Find the most recent non-zero closing price
             cursor.execute("""
