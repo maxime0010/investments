@@ -70,7 +70,9 @@ def update_existing_portfolio(cursor, today, closing_prices):
             """, (ticker,))
             latest_closing_price = Decimal(cursor.fetchone()[0])
 
+        quantity = Decimal(quantity)  # Ensure quantity is a Decimal
         total_value_sell = quantity * latest_closing_price
+        total_value = Decimal(total_value)  # Ensure total_value is a Decimal
         evolution = total_value_sell - total_value
 
         cursor.execute("""
