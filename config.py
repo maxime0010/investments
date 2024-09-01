@@ -24,14 +24,13 @@ def calculate_median_success_rate():
 
     # Calculate median overall_success_rate
     query = """
-        SELECT ROUND(AVG(sub.overall_success_rate), 2) AS median_success_rate
+        SELECT ROUND(AVG(derived.overall_success_rate), 2) AS median_success_rate
         FROM (
             SELECT overall_success_rate
             FROM analysts
             ORDER BY overall_success_rate
-            LIMIT 2 - (SELECT COUNT(*) FROM analysts) % 2    -- odd or even number of rows
-            OFFSET (SELECT FLOOR((COUNT(*) - 1) / 2) FROM analysts)
-        ) AS sub;
+            LIMIT 1 OFFSET (SELECT FLOOR(COUNT(*) / 2) FROM analysts)
+        ) AS derived;
     """
     cursor.execute(query)
     median_success_rate = cursor.fetchone()[0]
@@ -40,6 +39,7 @@ def calculate_median_success_rate():
     conn.close()
 
     return Decimal(median_success_rate) if median_success_rate is not None else Decimal(0)
+
 
 
 
