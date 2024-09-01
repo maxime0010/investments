@@ -40,60 +40,74 @@ def get_last_closing_price(cursor):
     return cursor.fetchall()
 
 def get_existing_portfolio(cursor, date):
-    cursor.execute("SELECT ticker, quantity FROM portfolio WHERE date = %s", (date,))
+    cursor.execute("SELECT ranking, ticker, quantity, total_value FROM portfolio WHERE date = %s", (date,))
     return cursor.fetchall()
 
-def calculate_total_portfolio_value(portfolio, closing_prices):
-    total_value = 0
+def update_existing_portfolio(cursor, today, closing_prices):
     closing_price_dict = dict(closing_prices)
-    for ticker, quantity in portfolio:
-        total_value += quantity * closing_price_dict.get(ticker, 0)
-    return total_value
 
-def insert_or_update_portfolio(cursor, date, portfolio_data):
-    for data in portfolio_data:
-        # Ensure correct data order: (date, ranking, ticker, quantity, total_value)
-        data_tuple = (
-            date,                # First value: date
-            data[0],             # Second value: ranking
-            data[1],             # Third value: ticker
-            data[2] if len(data) > 2 else None,  # Fourth value: quantity
-            data[3] if len(data) > 3 else None   # Fifth value: total_value
-        )
-        print(f"Executing SQL with data: {data_tuple}")  # Debugging statement
+    # Update the most recent existing portfolio
+    cursor.execute("SELECT MAX(date) FROM portfolio WHERE date < %s", (today,))
+    latest_portfolio_date = cursor.fetchone()[0]
+
+    if not latest_portfolio_date:
+        return  # No previous portfolio to update
+
+    cursor.execute("SELECT ticker, quantity, total_value FROM portfolio WHERE date = %s", (latest_portfolio_date,))
+    existing_portfolio = cursor.fetchall()
+
+    for ticker, quantity, total_value in existing_portfolio:
+        latest_closing_price = closing_price_dict.get(ticker, 0)
+        if latest_closing_price == 0:
+            # Find the most recent non-zero closing price
+            cursor.execute("""
+                SELECT close 
+                FROM prices 
+                WHERE ticker = %s AND close > 0 
+                ORDER BY date DESC 
+                LIMIT 1
+            """, (ticker,))
+            latest_closing_price = cursor.fetchone()[0]
+
+        total_value_sell = quantity * latest_closing_price
+        evolution = total_value_sell - total_value
+
         cursor.execute("""
-            INSERT INTO portfolio (date, ranking, ticker, quantity, total_value)
-            VALUES (%s, %s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE quantity = VALUES(quantity), total_value = VALUES(total_value)
-        """, data_tuple)
+            UPDATE portfolio
+            SET date_sell = %s, 
+                stock_price_sell = %s, 
+                total_value_sell = %s, 
+                evolution = %s
+            WHERE ticker = %s AND date = %s
+        """, (today, latest_closing_price, total_value_sell, evolution, ticker, latest_portfolio_date))
 
-def update_portfolio(cursor, latest_date, new_portfolio, closing_prices):
-    existing_portfolio = get_existing_portfolio(cursor, latest_date)
+def insert_new_portfolio(cursor, today, new_portfolio, closing_prices):
     closing_price_dict = dict(closing_prices)
 
-    if existing_portfolio:
-        existing_tickers = set(ticker for ticker, _ in existing_portfolio)
-        new_tickers = set(ticker for ticker, _, _ in new_portfolio)
-        
-        if existing_tickers == new_tickers:
-            insert_or_update_portfolio(cursor, latest_date, new_portfolio)
-        else:
-            total_value = calculate_total_portfolio_value(existing_portfolio, closing_prices)
-            equal_value_per_stock = total_value / len(new_portfolio)
-            new_portfolio_data = []
+    cursor.execute("SELECT SUM(total_value_sell) FROM portfolio WHERE date_sell = %s", (today,))
+    aggregated_total_value_sell = cursor.fetchone()[0] or 0
+    equal_value_per_stock = aggregated_total_value_sell / 10
 
-            for ranking, (ticker, _, last_price) in enumerate(new_portfolio, start=1):
-                quantity = equal_value_per_stock / last_price if last_price else 0
-                total_value_stock = quantity * last_price
-                new_portfolio_data.append((ranking, ticker, quantity, total_value_stock))
-            
-            cursor.execute("DELETE FROM portfolio WHERE date = %s", (latest_date,))
-            insert_or_update_portfolio(cursor, latest_date, new_portfolio_data)
-    else:
-        new_portfolio_data = []
-        for ranking, (ticker, _, last_price) in enumerate(new_portfolio, start=1):
-            new_portfolio_data.append((ranking, ticker, None, None))
-        insert_or_update_portfolio(cursor, latest_date, new_portfolio_data)
+    for ranking, (ticker, expected_return, _) in enumerate(new_portfolio, start=1):
+        last_closing_price = closing_price_dict.get(ticker, 0)
+        if last_closing_price == 0:
+            # Find the most recent non-zero closing price
+            cursor.execute("""
+                SELECT close 
+                FROM prices 
+                WHERE ticker = %s AND close > 0 
+                ORDER BY date DESC 
+                LIMIT 1
+            """, (ticker,))
+            last_closing_price = cursor.fetchone()[0]
+
+        total_value = equal_value_per_stock
+        quantity = total_value / last_closing_price
+
+        cursor.execute("""
+            INSERT INTO portfolio (date, ranking, ticker, stock_price, quantity, total_value)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (today, ranking, ticker, last_closing_price, quantity, total_value))
 
 def fetch_new_portfolio(cursor):
     cursor.execute("""
@@ -110,11 +124,15 @@ try:
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
-    latest_date = get_latest_closing_date(cursor)
+    today = datetime.today().date()
     closing_prices = get_last_closing_price(cursor)
-    new_portfolio = fetch_new_portfolio(cursor)
 
-    update_portfolio(cursor, latest_date, new_portfolio, closing_prices)
+    # Step 1: Update the most recent existing portfolio
+    update_existing_portfolio(cursor, today, closing_prices)
+
+    # Step 2: Create and insert the new portfolio
+    new_portfolio = fetch_new_portfolio(cursor)
+    insert_new_portfolio(cursor, today, new_portfolio, closing_prices)
 
     conn.commit()
     cursor.close()
