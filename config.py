@@ -22,23 +22,31 @@ def calculate_median_success_rate():
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
-    # Fetch the overall_success_rate column and order it
-    cursor.execute("SELECT overall_success_rate FROM analysts ORDER BY overall_success_rate")
-    success_rates = [row[0] for row in cursor.fetchall()]
+    # Calculate median overall_success_rate
+    query = """
+        SELECT 
+            ROUND(AVG(t.overall_success_rate), 2) AS median_success_rate
+        FROM (
+            SELECT 
+                overall_success_rate,
+                @rownum := @rownum + 1 AS row_number,
+                @total_rows := @rownum
+            FROM 
+                analysts, (SELECT @rownum := 0) r
+            ORDER BY 
+                overall_success_rate
+        ) AS t
+        WHERE 
+            t.row_number IN (FLOOR((@total_rows + 1) / 2), CEIL((@total_rows + 1) / 2));
+    """
+    cursor.execute(query)
+    median_success_rate = cursor.fetchone()[0]
 
     cursor.close()
     conn.close()
 
-    # Calculate the median
-    n = len(success_rates)
-    if n == 0:
-        return 0  # Return 0 or a default value if there are no records
+    return median_success_rate
 
-    if n % 2 == 1:
-        return success_rates[n // 2]
-    else:
-        mid_index = n // 2
-        return (success_rates[mid_index - 1] + success_rates[mid_index]) / 2
 
 # Configuration settings
 DAYS_RECENT = 31  # Number of days to define "recent"
