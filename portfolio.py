@@ -29,7 +29,7 @@ def get_last_closing_price(cursor):
     query = """
         SELECT 
             ticker,
-            close AS last_closing_price
+            CAST(close AS DECIMAL(10, 2)) AS last_closing_price
         FROM prices
         WHERE (ticker, date) IN (
             SELECT ticker, MAX(date) 
@@ -45,7 +45,7 @@ def get_existing_portfolio(cursor, date):
     return cursor.fetchall()
 
 def update_existing_portfolio(cursor, today, closing_prices):
-    closing_price_dict = dict(closing_prices)
+    closing_price_dict = {ticker: Decimal(price) for ticker, price in closing_prices}
 
     # Update the most recent existing portfolio
     cursor.execute("SELECT MAX(date) FROM portfolio WHERE date < %s", (today,))
@@ -62,13 +62,13 @@ def update_existing_portfolio(cursor, today, closing_prices):
         if latest_closing_price == 0:
             # Find the most recent non-zero closing price
             cursor.execute("""
-                SELECT close 
+                SELECT CAST(close AS DECIMAL(10, 2)) 
                 FROM prices 
                 WHERE ticker = %s AND close > 0 
                 ORDER BY date DESC 
                 LIMIT 1
             """, (ticker,))
-            latest_closing_price = cursor.fetchone()[0]
+            latest_closing_price = Decimal(cursor.fetchone()[0])
 
         total_value_sell = quantity * latest_closing_price
         evolution = total_value_sell - total_value
@@ -83,10 +83,10 @@ def update_existing_portfolio(cursor, today, closing_prices):
         """, (today, latest_closing_price, total_value_sell, evolution, ticker, latest_portfolio_date))
 
 def insert_new_portfolio(cursor, today, new_portfolio, closing_prices):
-    closing_price_dict = dict(closing_prices)
+    closing_price_dict = {ticker: Decimal(price) for ticker, price in closing_prices}
 
     cursor.execute("SELECT SUM(total_value_sell) FROM portfolio WHERE date_sell = %s", (today,))
-    aggregated_total_value_sell = cursor.fetchone()[0] or Decimal(0)
+    aggregated_total_value_sell = Decimal(cursor.fetchone()[0] or 0)
     equal_value_per_stock = aggregated_total_value_sell / Decimal(10)
 
     for ranking, (ticker, expected_return, _) in enumerate(new_portfolio, start=1):
@@ -94,13 +94,13 @@ def insert_new_portfolio(cursor, today, new_portfolio, closing_prices):
         if last_closing_price == 0:
             # Find the most recent non-zero closing price
             cursor.execute("""
-                SELECT close 
+                SELECT CAST(close AS DECIMAL(10, 2)) 
                 FROM prices 
                 WHERE ticker = %s AND close > 0 
                 ORDER BY date DESC 
                 LIMIT 1
             """, (ticker,))
-            last_closing_price = cursor.fetchone()[0]
+            last_closing_price = Decimal(cursor.fetchone()[0])
 
         total_value = equal_value_per_stock
         quantity = total_value / last_closing_price
