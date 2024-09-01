@@ -41,6 +41,6 @@ def calculate_median_success_rate():
         return (success_rates[mid_index - 1] + success_rates[mid_index]) / 2
 
 # Configuration settings
-DAYS_RECENT = 30  # Number of days to define "recent"
+DAYS_RECENT = 31  # Number of days to define "recent"
 SUCCESS_RATE_THRESHOLD = calculate_median_success_rate()  # Dynamically calculated
 MIN_ANALYSTS = 3  # Minimum number of analysts covering a stock
