@@ -1,19 +1,11 @@
 import mysql.connector
-import os
-
-# Retrieve MySQL password and host from environment variables
-mdp = os.getenv("MYSQL_MDP")
-if not mdp:
-    raise ValueError("No MySQL password found in environment variables")
-host = os.getenv("MYSQL_HOST")
-if not host:
-    raise ValueError("No Host found in environment variables")
+from decimal import Decimal
 
 # Database connection configuration
 db_config = {
     'user': 'doadmin',
-    'password': mdp,
-    'host': host,
+    'password': os.getenv("MYSQL_MDP"),
+    'host': os.getenv("MYSQL_HOST"),
     'database': 'defaultdb',
     'port': 25060
 }
@@ -40,10 +32,6 @@ def calculate_median_success_rate():
 
     return Decimal(median_success_rate) if median_success_rate is not None else Decimal(0)
 
-
-
-
-# Configuration settings
-DAYS_RECENT = 31  # Number of days to define "recent"
+DAYS_RECENT = 30  # Number of days to define "recent"
 SUCCESS_RATE_THRESHOLD = calculate_median_success_rate()  # Dynamically calculated
 MIN_ANALYSTS = 3  # Minimum number of analysts covering a stock
