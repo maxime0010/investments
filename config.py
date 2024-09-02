@@ -1,4 +1,5 @@
 import mysql.connector
+import os
 from decimal import Decimal
 
 # Database connection configuration
