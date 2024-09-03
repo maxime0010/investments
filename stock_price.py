@@ -69,8 +69,12 @@ def insert_price_data(price_data):
                      "ON DUPLICATE KEY UPDATE close = VALUES(close)")
 
         for price in price_data:
-            cursor.execute(add_price, price)
-        
+            # Only insert if the close price is not zero or None
+            if price['close'] > 0:
+                cursor.execute(add_price, price)
+            else:
+                print(f"Invalid data for {price['ticker']} on {price['date']}: Close price is {price['close']}")
+
         conn.commit()
         cursor.close()
         conn.close()
@@ -94,10 +98,7 @@ def is_data_up_to_date():
         conn.close()
 
         # Check if the last_date is today
-        if last_date and last_date.strftime('%Y-%m-%d') == today_date:
-            return True
-        return False
-
+        return last_date is not None and last_date.strftime('%Y-%m-%d') == today_date
     except mysql.connector.Error as err:
         print(f"Error: {err}")
         return False
@@ -125,20 +126,24 @@ def fetch_and_store_prices(tickers):
         response.raise_for_status()
         data = response.json()
 
-        if data["s"] == "ok":
-            for idx, ticker in enumerate(data["symbol"]):
-                # Convert Unix timestamp to date
-                timestamp = int(data['updated'][idx])
-                date = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d')
+        if data.get("s") == "ok" and "symbol" in data:
+            for idx, ticker in enumerate(data.get("symbol", [])):
+                close_price = data['last'][idx]
+                # Ensure the close price is a valid number
+                if close_price is not None and close_price > 0:
+                    timestamp = int(data['updated'][idx])
+                    date = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d')
 
-                price_data.append({
-                    'ticker': ticker,
-                    'date': date,  # Use the converted date
-                    'close': data['last'][idx]
-                })
-            print(f"Fetched and prepared data for {len(tickers)} tickers.")
+                    price_data.append({
+                        'ticker': ticker,
+                        'date': date,
+                        'close': close_price
+                    })
+                else:
+                    print(f"Skipping {ticker} due to invalid close price: {close_price}")
+            print(f"Fetched and prepared data for {len(price_data)} tickers.")
         else:
-            print(f"No data returned for tickers: {tickers}")
+            print(f"No valid data returned for tickers: {tickers}")
     
     except requests.exceptions.HTTPError as http_err:
         print(f"HTTP error occurred for tickers {tickers}: {http_err}")
@@ -157,5 +162,8 @@ try:
     fetch_and_store_prices(sp500_tickers)
     exit_program()
 except Exception as e:
+    print(f"An error occurred: {e}")
+    exit_program()
+
     print(f"An error occurred: {e}")
     exit_program()
