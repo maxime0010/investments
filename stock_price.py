@@ -69,11 +69,22 @@ def insert_price_data(price_data):
                      "ON DUPLICATE KEY UPDATE close = VALUES(close)")
 
         for price in price_data:
-            # Only insert if the close price is not zero or None
-            if price['close'] > 0:
+            ticker = price['ticker']
+            date = price['date']
+            close_price = price['close']
+
+            # Debug statement to show what's being added
+            print(f"Processing {ticker} for date {date} with close price {close_price}")
+
+            # Check if the current close price is zero in the database
+            cursor.execute("SELECT close FROM prices WHERE ticker = %s AND date = %s", (ticker, date))
+            existing_close_price = cursor.fetchone()
+
+            if existing_close_price is None or existing_close_price[0] == 0:
                 cursor.execute(add_price, price)
+                print(f"Inserted/Updated {ticker} on {date} with close price {close_price}")
             else:
-                print(f"Invalid data for {price['ticker']} on {price['date']}: Close price is {price['close']}")
+                print(f"Skipped {ticker} on {date} as the close price is already non-zero in the database")
 
         conn.commit()
         cursor.close()
@@ -139,6 +150,7 @@ def fetch_and_store_prices(tickers):
                         'date': date,
                         'close': close_price
                     })
+                    print(f"Prepared data for {ticker} on {date} with close price {close_price}")
                 else:
                     print(f"Skipping {ticker} due to invalid close price: {close_price}")
             print(f"Fetched and prepared data for {len(price_data)} tickers.")
@@ -165,5 +177,3 @@ except Exception as e:
     print(f"An error occurred: {e}")
     exit_program()
 
-    print(f"An error occurred: {e}")
-    exit_program()
