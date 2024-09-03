@@ -95,27 +95,37 @@ def insert_price_data(price_data):
         print(f"An unexpected error occurred: {e}")
 
 def is_data_up_to_date():
-    """Check if today's data already exists in the database."""
+    """Check if today's data already exists in the database and ensure no zero values exist."""
     try:
         conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
         today_date = datetime.utcnow().strftime('%Y-%m-%d')
 
-        # Query the database for the most recent entry
-        cursor.execute("SELECT MAX(date) FROM prices")
-        last_date = cursor.fetchone()[0]
+        # Query the database for the most recent entry with a non-zero close price
+        cursor.execute("""
+            SELECT ticker, close
+            FROM prices
+            WHERE date = %s
+        """, (today_date,))
+
+        rows = cursor.fetchall()
 
         cursor.close()
         conn.close()
 
-        # Check if the last_date is today
-        return last_date is not None and last_date.strftime('%Y-%m-%d') == today_date
+        # If any of the prices are zero or if no data exists for today, return False
+        if not rows or any(row['close'] == 0 for row in rows):
+            return False
+
+        return True
+
     except mysql.connector.Error as err:
         print(f"Error: {err}")
         return False
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return False
+
 
 def fetch_and_store_prices(tickers):
     if is_data_up_to_date():
