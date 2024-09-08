@@ -26,7 +26,7 @@ sp500_tickers = [
 ]
 
 # Define the folder path containing the CSV files
-csv_folder = "csv"
+csv_folder = "/csv/"
 
 # Check if the CSV folder exists and contains files
 if not os.path.exists(csv_folder):
@@ -41,6 +41,8 @@ else:
     else:
         print(f"Found {len(csv_files)} CSV files in {csv_folder}.")
 
+# Connect to the MySQL database
+print(f"Connecting to MySQL database at {MYSQL_HOST}...")
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
 
@@ -80,6 +82,9 @@ for csv_file in csv_files:
         except Exception as e:
             print(f"Error converting date in {csv_file}: {e}")
             continue
+
+        # Remove dollar signs and convert the close prices to float
+        df['Close/Last'] = df['Close/Last'].replace({'\$': ''}, regex=True).astype(float)
 
         # Loop through each row in the DataFrame
         for _, row in df.iterrows():
