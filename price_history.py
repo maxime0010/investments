@@ -57,10 +57,12 @@ sp500_tickers = [
 csv_folder = "/csv/"
 
 # Connect to the MySQL database
+print(f"Connecting to MySQL database at {MYSQL_HOST}...")
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
 
 # Create the prices table if it doesn't exist
+print("Creating table 'prices' if not exists...")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS prices (
     ticker VARCHAR(10),
@@ -70,35 +72,56 @@ CREATE TABLE IF NOT EXISTS prices (
 )
 """)
 conn.commit()
+print("Table check/creation completed.")
 
 # Loop through each CSV file
 for csv_file in glob(os.path.join(csv_folder, "*.csv")):
     # Extract the ticker from the filename
     ticker = os.path.basename(csv_file).split('.')[0].upper()
+    print(f"Processing CSV for ticker: {ticker}")
 
     # Check if the ticker is in the S&P 500 list
     if ticker in sp500_tickers:
+        print(f"Ticker {ticker} is in the S&P 500 list.")
         # Read the CSV file into a DataFrame
-        df = pd.read_csv(csv_file)
+        try:
+            df = pd.read_csv(csv_file)
+            print(f"Read {len(df)} rows from {csv_file}.")
+        except Exception as e:
+            print(f"Error reading {csv_file}: {e}")
+            continue
 
         # Ensure the date column is in datetime format
-        df['Date'] = pd.to_datetime(df['Date'], format='%m/%d/%Y')
+        try:
+            df['Date'] = pd.to_datetime(df['Date'], format='%m/%d/%Y')
+        except Exception as e:
+            print(f"Error converting date in {csv_file}: {e}")
+            continue
 
         # Loop through each row in the DataFrame
         for _, row in df.iterrows():
             date = row['Date'].date()
             close = row['Close/Last']
 
+            print(f"Inserting/updating data for {ticker} on {date}: Close = {close}")
+            
             # Insert or update the data in the prices table
-            cursor.execute("""
-            INSERT INTO prices (ticker, date, close)
-            VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE close = VALUES(close)
-            """, (ticker, date, close))
+            try:
+                cursor.execute("""
+                INSERT INTO prices (ticker, date, close)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE close = VALUES(close)
+                """, (ticker, date, close))
+            except Exception as e:
+                print(f"Error inserting data for {ticker} on {date}: {e}")
+                continue
+    else:
+        print(f"Ticker {ticker} is NOT in the S&P 500 list, skipping.")
 
 # Commit the transaction and close the connection
 conn.commit()
+print("Data insertion/update completed.")
 cursor.close()
 conn.close()
+print("Database connection closed.")
 
-print("Data has been successfully inserted/updated in the 'prices' table.")
