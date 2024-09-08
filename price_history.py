@@ -54,7 +54,7 @@ sp500_tickers = [
 ]
 
 # Define the folder path containing the CSV files
-csv_folder = "/csv/"
+csv_folder = "csv"
 
 # Check if the CSV folder exists and contains files
 if not os.path.exists(csv_folder):
@@ -69,8 +69,6 @@ else:
     else:
         print(f"Found {len(csv_files)} CSV files in {csv_folder}.")
 
-# Connect to the MySQL database
-print(f"Connecting to MySQL database at {MYSQL_HOST}...")
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
 
