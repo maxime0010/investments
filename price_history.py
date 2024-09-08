@@ -56,8 +56,6 @@ sp500_tickers = [
 # Define the folder path containing the CSV files
 csv_folder = "/csv/"
 
-# Connect to the MySQL database
-print(f"Connecting to MySQL database at {MYSQL_HOST}...")
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
 
