@@ -41,8 +41,6 @@ else:
     else:
         print(f"Found {len(csv_files)} CSV files in {csv_folder}.")
 
-# Connect to the MySQL database
-print(f"Connecting to MySQL database at {MYSQL_HOST}...")
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
 
