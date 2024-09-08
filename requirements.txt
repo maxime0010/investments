@@ -4,3 +4,4 @@ requests
 six
 python-dotenv
 mysql-connector-python
+pandas
