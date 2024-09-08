@@ -56,6 +56,21 @@ sp500_tickers = [
 # Define the folder path containing the CSV files
 csv_folder = "/csv/"
 
+# Check if the CSV folder exists and contains files
+if not os.path.exists(csv_folder):
+    print(f"CSV folder {csv_folder} does not exist.")
+else:
+    print(f"CSV folder {csv_folder} found.")
+
+    # Check if any CSV files exist in the folder
+    csv_files = glob(os.path.join(csv_folder, "*.csv"))
+    if not csv_files:
+        print(f"No CSV files found in {csv_folder}.")
+    else:
+        print(f"Found {len(csv_files)} CSV files in {csv_folder}.")
+
+# Connect to the MySQL database
+print(f"Connecting to MySQL database at {MYSQL_HOST}...")
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
 
@@ -73,7 +88,7 @@ conn.commit()
 print("Table check/creation completed.")
 
 # Loop through each CSV file
-for csv_file in glob(os.path.join(csv_folder, "*.csv")):
+for csv_file in csv_files:
     # Extract the ticker from the filename
     ticker = os.path.basename(csv_file).split('.')[0].upper()
     print(f"Processing CSV for ticker: {ticker}")
@@ -122,4 +137,3 @@ print("Data insertion/update completed.")
 cursor.close()
 conn.close()
 print("Database connection closed.")
-
