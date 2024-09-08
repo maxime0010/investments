@@ -60,6 +60,17 @@ else:
 conn = mysql.connector.connect(**db_config)
 cursor = conn.cursor()
 
+# Prepare MySQL table
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS prices (
+    ticker VARCHAR(10),
+    date DATE,
+    close DECIMAL(10, 2),
+    PRIMARY KEY (ticker, date)
+)
+""")
+conn.commit()
+
 # Loop through each CSV file
 for csv_file in csv_files:
     # Extract the ticker from the filename
@@ -77,39 +88,45 @@ for csv_file in csv_files:
             print(f"Error reading {csv_file}: {e}")
             continue
 
-        # Ensure the date column is in datetime format
+        # Ensure the date column is in datetime format and remove dollar sign from 'Close/Last'
         try:
             df['Date'] = pd.to_datetime(df['Date'], format='%m/%d/%Y')
+            df['Close/Last'] = df['Close/Last'].replace({'\$': ''}, regex=True).astype(float)
         except Exception as e:
-            print(f"Error converting date in {csv_file}: {e}")
+            print(f"Error processing data in {csv_file}: {e}")
             continue
 
-        # Remove dollar signs and convert the close prices to float
-        df['Close/Last'] = df['Close/Last'].replace({'\$': ''}, regex=True).astype(float)
+        # Add a column for the ticker
+        df['Ticker'] = ticker
 
-        # Loop through each row in the DataFrame
-        for _, row in df.iterrows():
-            date = row['Date'].date()
-            close = row['Close/Last']
+        # Select the necessary columns and save to a temporary CSV file
+        temp_csv_file = f"temp_{ticker}.csv"
+        try:
+            df[['Ticker', 'Date', 'Close/Last']].to_csv(temp_csv_file, index=False, header=False)
+            print(f"Temporary CSV created: {temp_csv_file}")
+        except Exception as e:
+            print(f"Error writing temp CSV for {ticker}: {e}")
+            continue
 
-            print(f"Inserting/updating data for {ticker} on {date}: Close = {close}")
-            
-            # Insert or update the data in the prices table
-            try:
-                cursor.execute("""
-                INSERT INTO prices (ticker, date, close)
-                VALUES (%s, %s, %s)
-                ON DUPLICATE KEY UPDATE close = VALUES(close)
-                """, (ticker, date, close))
-            except Exception as e:
-                print(f"Error inserting data for {ticker} on {date}: {e}")
-                continue
+        # Load the data using LOAD DATA INFILE
+        try:
+            cursor.execute(f"""
+            LOAD DATA LOCAL INFILE '{temp_csv_file}'
+            INTO TABLE prices
+            FIELDS TERMINATED BY ',' 
+            LINES TERMINATED BY '\\n'
+            (ticker, date, close)
+            """)
+            conn.commit()
+            print(f"Data for {ticker} loaded successfully.")
+        except Exception as e:
+            print(f"Error loading data for {ticker}: {e}")
+            continue
     else:
         print(f"Ticker {ticker} is NOT in the S&P 500 list, skipping.")
 
-# Commit the transaction and close the connection
-conn.commit()
-print("Data insertion/update completed.")
+# Close the connection
 cursor.close()
 conn.close()
 print("Database connection closed.")
+
