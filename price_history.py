@@ -26,7 +26,7 @@ sp500_tickers = [
 ]
 
 # Define the folder path containing the CSV files
-csv_folder = "/csv/"
+csv_folder = "csv"
 
 # Check if the CSV folder exists and contains files
 if not os.path.exists(csv_folder):
