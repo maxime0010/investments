@@ -2,7 +2,6 @@ import os
 import mysql.connector
 from datetime import datetime, timedelta
 from decimal import Decimal
-from config import MIN_ANALYSTS
 import time
 
 # Retrieve MySQL password from environment variables
@@ -79,10 +78,50 @@ def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
     print(f"[DEBUG] Calculated portfolio value: {portfolio_value}")
     return total_value, portfolio_value
 
+def update_existing_portfolio(cursor, today, closing_prices):
+    closing_price_dict = {ticker: Decimal(price) for ticker, price in closing_prices}
+
+    # Update the most recent existing portfolio
+    cursor.execute("SELECT MAX(date) FROM portfolio_simulation WHERE date < %s", (today,))
+    latest_portfolio_date = cursor.fetchone()[0]
+
+    if not latest_portfolio_date:
+        return  # No previous portfolio to update
+
+    cursor.execute("SELECT ticker, quantity, total_value FROM portfolio_simulation WHERE date = %s", (latest_portfolio_date,))
+    existing_portfolio = cursor.fetchall()
+
+    for ticker, quantity, total_value in existing_portfolio:
+        latest_closing_price = closing_price_dict.get(ticker, Decimal(0))
+        if latest_closing_price == 0:
+            # Find the most recent non-zero closing price
+            cursor.execute("""
+                SELECT CAST(close AS DECIMAL(10, 2)) 
+                FROM prices 
+                WHERE ticker = %s AND close > 0 
+                ORDER BY date DESC 
+                LIMIT 1
+            """, (ticker,))
+            latest_closing_price = Decimal(cursor.fetchone()[0])
+
+        quantity = Decimal(quantity)
+        total_value_sell = quantity * latest_closing_price
+        total_value = Decimal(total_value)
+        evolution = total_value_sell - total_value
+
+        cursor.execute("""
+            UPDATE portfolio_simulation
+            SET date_sell = %s, 
+                stock_price_sell = %s, 
+                total_value_sell = %s, 
+                evolution = %s
+            WHERE ticker = %s AND date = %s
+        """, (today, latest_closing_price, total_value_sell, evolution, ticker, latest_portfolio_date))
+
 def batch_insert_portfolio_simulation(cursor, portfolio_data):
     query = """
-        INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value, total_portfolio_value)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """
     print(f"[DEBUG] Inserting portfolio simulation data: {portfolio_data}")
     cursor.executemany(query, portfolio_data)
@@ -111,7 +150,7 @@ def simulate_portfolio(retries=3):
             portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
         
         # Prepare data for the first batch insert
-        portfolio_data = [(initial_date, ranking + 1, ticker, stock_price, quantity, total_value, total_portfolio_value)
+        portfolio_data = [(initial_date, ranking + 1, ticker, stock_price, quantity, total_value)
                           for ranking, (ticker, stock_price, quantity, total_value) in enumerate(portfolio_value)]
         batch_insert_portfolio_simulation(cursor, portfolio_data)
 
@@ -140,9 +179,12 @@ def simulate_portfolio(retries=3):
                             new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
                         
                         # Prepare batch insert data
-                        portfolio_data = [(date, ranking + 1, ticker, stock_price, quantity, total_value, total_portfolio_value)
+                        portfolio_data = [(date, ranking + 1, ticker, stock_price, quantity, total_value)
                                           for ranking, (ticker, stock_price, quantity, total_value) in enumerate(new_portfolio_value)]
                         batch_insert_portfolio_simulation(cursor, portfolio_data)
+
+                    # Update the previous portfolio with sell details
+                    update_existing_portfolio(cursor, date, closing_prices)
 
                     conn.commit()
                     break  # Break the retry loop if successful
