@@ -137,7 +137,8 @@ def simulate_portfolio(retries=3):
         total_portfolio_value = Decimal(100)
 
         for row in analysis_dates:
-            date = row['date'].strftime('%Y-%m-%d')  # Convert to string for processing
+            # Access tuple by index, not by string key
+            date = row[0].strftime('%Y-%m-%d')  # Convert to string for processing
             print(f"[DEBUG] Processing date: {date}")
 
             # Fetch closing prices and portfolio for the current date
