@@ -1,10 +1,13 @@
 import os
 import mysql.connector
-from datetime import datetime, timedelta
+from datetime import datetime
+from dateutil.relativedelta import relativedelta  # Ensure this is imported for monthly intervals
 from decimal import Decimal
-from dateutil.relativedelta import relativedelta  # Use this for monthly intervals
 from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 import time
+
+# Define the minimum number of analysts required to consider a stock
+MIN_ANALYSTS = 5  # Adjust this value as per your logic
 
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
@@ -23,14 +26,16 @@ db_config = {
     'port': 25060
 }
 
-# Generate a list of dates from January 17, 2021, to today with monthly intervals
+# Generate a list of dates from January 17, 2021, to today with one-month intervals
 START_DATE = datetime(2021, 1, 17)
 END_DATE = datetime.now()
 date_list = []
 current_date = START_DATE
+
+# Only add one date per month
 while current_date <= END_DATE:
     date_list.append(current_date.strftime('%Y-%m-%d'))
-    current_date += relativedelta(months=1)  # Move forward by one month
+    current_date += relativedelta(months=1)  # Ensure monthly increments
 
 def get_closing_prices_as_of(cursor, date):
     query = """
