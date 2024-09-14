@@ -22,7 +22,7 @@ db_config = {
 }
 
 # Generate a list of dates from September 1, 2019, to today with one-week intervals
-START_DATE = datetime(2021, 01, 17)
+START_DATE = datetime(2021, 1, 17)
 END_DATE = datetime.now()
 date_list = []
 current_date = START_DATE
