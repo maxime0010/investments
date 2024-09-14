@@ -2,6 +2,7 @@ import os
 import mysql.connector
 from datetime import datetime, timedelta
 from decimal import Decimal
+from dateutil.relativedelta import relativedelta  # Use this for monthly intervals
 from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 import time
 
