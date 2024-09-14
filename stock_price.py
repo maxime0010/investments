@@ -73,10 +73,8 @@ def insert_price_data(price_data):
             date = price['date']
             close_price = price['close']
 
-            # Debug statement to show what's being added
             print(f"Processing {ticker} for date {date} with close price {close_price}")
 
-            # Check if the current close price is zero in the database
             cursor.execute("SELECT close FROM prices WHERE ticker = %s AND date = %s", (ticker, date))
             existing_close_price = cursor.fetchone()
 
@@ -101,7 +99,6 @@ def is_data_up_to_date():
         cursor = conn.cursor(dictionary=True)
         today_date = datetime.utcnow().strftime('%Y-%m-%d')
 
-        # Query the database for the most recent entry with a non-zero close price
         cursor.execute("""
             SELECT ticker, close
             FROM prices
@@ -113,12 +110,10 @@ def is_data_up_to_date():
         cursor.close()
         conn.close()
 
-        # If any of the prices are zero or if no data exists for today, return False
         if not rows or any(row['close'] == 0 for row in rows):
             return False
 
         return True
-
     except mysql.connector.Error as err:
         print(f"Error: {err}")
         return False
@@ -126,6 +121,38 @@ def is_data_up_to_date():
         print(f"An unexpected error occurred: {e}")
         return False
 
+def fetch_sp500_index():
+    """Fetch the latest S&P 500 index value."""
+    index_symbol = "SPX"  # S&P 500 symbol for the API
+    base_url = f"https://api.marketdata.app/v1/indices/quotes/{index_symbol}/"
+    
+    try:
+        headers = {"Authorization": f"Bearer {marketdata_api_key}"}
+        response = requests.get(base_url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get("s") == "ok":
+            last_price = data['last'][0]
+            timestamp = int(data['updated'][0])
+            date = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d')
+
+            sp500_data = {
+                'ticker': 'SPX',
+                'date': date,
+                'close': last_price
+            }
+
+            print(f"Fetched S&P 500 value: {last_price} on {date}")
+            return sp500_data
+        else:
+            print(f"Failed to fetch S&P 500 index data")
+            return None
+
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 def fetch_and_store_prices(tickers):
     if is_data_up_to_date():
@@ -137,12 +164,8 @@ def fetch_and_store_prices(tickers):
     price_data = []
 
     try:
-        headers = {
-            "Authorization": f"Bearer {marketdata_api_key}"
-        }
-        params = {
-            "symbols": symbols
-        }
+        headers = {"Authorization": f"Bearer {marketdata_api_key}"}
+        params = {"symbols": symbols}
         response = requests.get(base_url, headers=headers, params=params)
         response.raise_for_status()
         data = response.json()
@@ -150,7 +173,6 @@ def fetch_and_store_prices(tickers):
         if data.get("s") == "ok" and "symbol" in data:
             for idx, ticker in enumerate(data.get("symbol", [])):
                 close_price = data['last'][idx]
-                # Ensure the close price is a valid number
                 if close_price is not None and close_price > 0:
                     timestamp = int(data['updated'][idx])
                     date = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d')
@@ -161,8 +183,6 @@ def fetch_and_store_prices(tickers):
                         'close': close_price
                     })
                     print(f"Prepared data for {ticker} on {date} with close price {close_price}")
-                else:
-                    print(f"Skipping {ticker} due to invalid close price: {close_price}")
             print(f"Fetched and prepared data for {len(price_data)} tickers.")
         else:
             print(f"No valid data returned for tickers: {tickers}")
@@ -171,7 +191,12 @@ def fetch_and_store_prices(tickers):
         print(f"HTTP error occurred for tickers {tickers}: {http_err}")
     except Exception as e:
         print(f"An error occurred: {e}")
-    
+
+    # Fetch S&P 500 index and add it to the price data
+    sp500_data = fetch_sp500_index()
+    if sp500_data:
+        price_data.append(sp500_data)
+
     if price_data:
         insert_price_data(price_data)
 
@@ -186,4 +211,3 @@ try:
 except Exception as e:
     print(f"An error occurred: {e}")
     exit_program()
-
