@@ -21,7 +21,7 @@ db_config = {
     'port': 25060
 }
 
-# Generate a list of dates from September 1, 2019, to today with one-week intervals
+# Generate a list of dates from January 17, 2021, to today with one-week intervals
 START_DATE = datetime(2021, 1, 17)
 END_DATE = datetime.now()
 date_list = []
@@ -62,71 +62,86 @@ def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
     total_value = 0
     portfolio_value = []
     
-    for ticker, quantity, total_value in previous_portfolio:
+    for ticker, quantity, _ in previous_portfolio:
         last_closing_price = closing_price_dict.get(ticker, Decimal(0))
         if last_closing_price > 0:
-            total_value = Decimal(quantity) * last_closing_price
-        portfolio_value.append((ticker, last_closing_price, quantity, total_value))
-        total_value += total_value
+            total_value_current = Decimal(quantity) * last_closing_price
+            portfolio_value.append((ticker, last_closing_price, quantity, total_value_current))
+            total_value += total_value_current
     
     return total_value, portfolio_value
 
-def insert_portfolio_simulation(cursor, date, portfolio_value, total_portfolio_value):
-    for ranking, (ticker, stock_price, quantity, total_value) in enumerate(portfolio_value, start=1):
-        cursor.execute("""
-            INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value, total_portfolio_value)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (date, ranking, ticker, stock_price, quantity, total_value, total_portfolio_value))
+def batch_insert_portfolio_simulation(cursor, portfolio_data):
+    query = """
+        INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value, total_portfolio_value)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.executemany(query, portfolio_data)
 
-# Execution
-try:
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor()
+def simulate_portfolio():
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
 
-    # Initialize with the first portfolio value (100 total, 10 per stock)
-    initial_date = date_list[0]
-    initial_portfolio = fetch_portfolio_for_date(cursor, initial_date)
-    closing_prices = get_closing_prices_as_of(cursor, initial_date)
-    
-    # For the first portfolio, we allocate 10 units to each stock
-    total_portfolio_value = Decimal(100)
-    equal_value_per_stock = total_portfolio_value / Decimal(10)
-    portfolio_value = []
-    
-    for ticker, expected_return, last_closing_price in initial_portfolio:
-        quantity = equal_value_per_stock / last_closing_price
-        portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
-    
-    # Insert the initial portfolio
-    insert_portfolio_simulation(cursor, initial_date, portfolio_value, total_portfolio_value)
+        # Initialize the first portfolio value (100 total, 10 per stock)
+        initial_date = date_list[0]
+        initial_portfolio = fetch_portfolio_for_date(cursor, initial_date)
+        closing_prices = get_closing_prices_as_of(cursor, initial_date)
+        
+        total_portfolio_value = Decimal(100)
+        equal_value_per_stock = total_portfolio_value / Decimal(10)
+        portfolio_value = []
 
-    # Process for each subsequent date
-    for date in date_list[1:]:
-        # Fetch closing prices as of this date
-        closing_prices = get_closing_prices_as_of(cursor, date)
+        # For the first portfolio, we allocate 10 units to each stock
+        for ticker, expected_return, last_closing_price in initial_portfolio:
+            quantity = equal_value_per_stock / last_closing_price
+            portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
         
-        # Calculate the portfolio value based on the previous week
-        total_portfolio_value, portfolio_value = calculate_portfolio_value(cursor, date, portfolio_value, closing_prices)
-        
-        # Fetch the new portfolio and rebalance
-        new_portfolio = fetch_portfolio_for_date(cursor, date)
-        
-        if new_portfolio:
-            equal_value_per_stock = total_portfolio_value / Decimal(10)
-            new_portfolio_value = []
+        # Prepare data for the first batch insert
+        portfolio_data = [(initial_date, ranking + 1, ticker, stock_price, quantity, total_value, total_portfolio_value)
+                          for ranking, (ticker, stock_price, quantity, total_value) in enumerate(portfolio_value)]
+        batch_insert_portfolio_simulation(cursor, portfolio_data)
+
+        # Process for each subsequent date
+        for date in date_list[1:]:
+            # Fetch closing prices as of this date
+            closing_prices = get_closing_prices_as_of(cursor, date)
             
-            for ticker, expected_return, last_closing_price in new_portfolio:
-                quantity = equal_value_per_stock / last_closing_price
-                new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
+            # Calculate the portfolio value based on the previous week
+            total_portfolio_value, portfolio_value = calculate_portfolio_value(cursor, date, portfolio_value, closing_prices)
             
-            # Insert the new portfolio for this date
-            insert_portfolio_simulation(cursor, date, new_portfolio_value, total_portfolio_value)
-    
-    conn.commit()
-    cursor.close()
-    conn.close()
+            # Fetch the new portfolio and rebalance
+            new_portfolio = fetch_portfolio_for_date(cursor, date)
+            
+            if new_portfolio:
+                equal_value_per_stock = total_portfolio_value / Decimal(10)
+                new_portfolio_value = []
+                
+                for ticker, expected_return, last_closing_price in new_portfolio:
+                    quantity = equal_value_per_stock / last_closing_price
+                    new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
+                
+                # Prepare batch insert data
+                portfolio_data = [(date, ranking + 1, ticker, stock_price, quantity, total_value, total_portfolio_value)
+                                  for ranking, (ticker, stock_price, quantity, total_value) in enumerate(new_portfolio_value)]
+                batch_insert_portfolio_simulation(cursor, portfolio_data)
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
 
-except mysql.connector.Error as err:
-    print(f"Error: {err}")
-except Exception as e:
-    print(f"An unexpected error occurred: {e}")
+    except mysql.connector.Error as err:
+        print(f"Database error: {err}")
+        if conn:
+            conn.rollback()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        if conn:
+            conn.rollback()
+        cursor.close()
+        conn.close()
+
+# Run the simulation
+simulate_portfolio()
