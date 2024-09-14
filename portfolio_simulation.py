@@ -27,6 +27,8 @@ START_DATE = datetime(2021, 1, 17)
 END_DATE = datetime.now()
 date_list = []
 current_date = START_DATE
+
+# Add one date per week (weekly intervals)
 while current_date <= END_DATE:
     date_list.append(current_date.strftime('%Y-%m-%d'))
     current_date += timedelta(weeks=1)
@@ -54,7 +56,9 @@ def fetch_portfolio_for_date(cursor, date):
     query = """
         SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis_simulation
-        WHERE date = %s AND num_combined_criteria >= %s
+        WHERE date = %s 
+        AND num_combined_criteria >= %s
+        AND stddev_combined_criteria <= 100  -- New criterion: standard deviation <= 100
         ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """
@@ -70,7 +74,7 @@ def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
     portfolio_value = []
     
     print(f"[DEBUG] Calculating portfolio value for {date}")
-    for ticker, last_closing_price, quantity, _ in previous_portfolio:  # Adjusted to unpack 4 values
+    for ticker, last_closing_price, quantity, _ in previous_portfolio:
         last_closing_price = closing_price_dict.get(ticker, Decimal(0))
         if last_closing_price > 0:
             total_value_current = Decimal(quantity) * last_closing_price
@@ -155,7 +159,7 @@ def simulate_portfolio(retries=3):
                           for ranking, (ticker, stock_price, quantity, total_value) in enumerate(portfolio_value)]
         batch_insert_portfolio_simulation(cursor, portfolio_data)
 
-        # Process for each subsequent date
+        # Process for each subsequent week
         for date in date_list[1:]:
             for attempt in range(retries):
                 try:
