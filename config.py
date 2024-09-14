@@ -33,6 +33,6 @@ def calculate_median_success_rate():
 
     return Decimal(median_success_rate) if median_success_rate is not None else Decimal(0)
 
-DAYS_RECENT = 30  # Number of days to define "recent"
+DAYS_RECENT = 15  # Number of days to define "recent"
 SUCCESS_RATE_THRESHOLD = calculate_median_success_rate()  # Dynamically calculated
 MIN_ANALYSTS = 3  # Minimum number of analysts covering a stock
