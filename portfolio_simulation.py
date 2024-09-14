@@ -22,14 +22,14 @@ db_config = {
     'port': 25060
 }
 
-# Generate a list of dates from January 17, 2021, to today with one-week intervals
+# Generate a list of dates from January 17, 2021, to today with monthly intervals
 START_DATE = datetime(2021, 1, 17)
 END_DATE = datetime.now()
 date_list = []
 current_date = START_DATE
 while current_date <= END_DATE:
     date_list.append(current_date.strftime('%Y-%m-%d'))
-    current_date += timedelta(weeks=1)
+    current_date += relativedelta(months=1)  # Move forward by one month
 
 def get_closing_prices_as_of(cursor, date):
     query = """
@@ -70,7 +70,7 @@ def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
     portfolio_value = []
     
     print(f"[DEBUG] Calculating portfolio value for {date}")
-    for ticker, last_closing_price, quantity, _ in previous_portfolio:  # Adjusted to unpack 4 values
+    for ticker, last_closing_price, quantity, _ in previous_portfolio:
         last_closing_price = closing_price_dict.get(ticker, Decimal(0))
         if last_closing_price > 0:
             total_value_current = Decimal(quantity) * last_closing_price
@@ -162,7 +162,7 @@ def simulate_portfolio(retries=3):
                     # Fetch closing prices as of this date
                     closing_prices = get_closing_prices_as_of(cursor, date)
                     
-                    # Calculate the portfolio value based on the previous week
+                    # Calculate the portfolio value based on the previous month
                     total_portfolio_value, portfolio_value = calculate_portfolio_value(cursor, date, portfolio_value, closing_prices)
                     
                     # Fetch the new portfolio and rebalance
