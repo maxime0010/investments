@@ -44,8 +44,11 @@ def get_closing_prices_as_of(cursor, date):
             GROUP BY ticker
         )
     """
+    print(f"[DEBUG] Fetching closing prices for {date}")
     cursor.execute(query, (date,))
-    return cursor.fetchall()
+    result = cursor.fetchall()
+    print(f"[DEBUG] Retrieved closing prices: {result}")
+    return result
 
 def fetch_portfolio_for_date(cursor, date):
     query = """
@@ -55,21 +58,25 @@ def fetch_portfolio_for_date(cursor, date):
         ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """
+    print(f"[DEBUG] Fetching portfolio for {date}")
     cursor.execute(query, (date, MIN_ANALYSTS))
-    return cursor.fetchall()
+    result = cursor.fetchall()
+    print(f"[DEBUG] Retrieved portfolio: {result}")
+    return result
 
 def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
     closing_price_dict = {ticker: price for ticker, price in closing_prices}
     total_value = 0
     portfolio_value = []
     
+    print(f"[DEBUG] Calculating portfolio value for {date}")
     for ticker, quantity, _ in previous_portfolio:
         last_closing_price = closing_price_dict.get(ticker, Decimal(0))
         if last_closing_price > 0:
             total_value_current = Decimal(quantity) * last_closing_price
             portfolio_value.append((ticker, last_closing_price, quantity, total_value_current))
             total_value += total_value_current
-    
+    print(f"[DEBUG] Calculated portfolio value: {portfolio_value}")
     return total_value, portfolio_value
 
 def batch_insert_portfolio_simulation(cursor, portfolio_data):
@@ -77,7 +84,9 @@ def batch_insert_portfolio_simulation(cursor, portfolio_data):
         INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value, total_portfolio_value)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
+    print(f"[DEBUG] Inserting portfolio simulation data: {portfolio_data}")
     cursor.executemany(query, portfolio_data)
+    print(f"[DEBUG] Insert completed")
 
 def simulate_portfolio(retries=3):
     try:
@@ -94,8 +103,10 @@ def simulate_portfolio(retries=3):
         portfolio_value = []
 
         # For the first portfolio, we allocate 10 units to each stock
+        print(f"[DEBUG] Initial portfolio: {initial_portfolio}")
         for row in initial_portfolio:
             ticker, expected_return, last_closing_price = row[:3]  # Ensure you're unpacking the correct values
+            print(f"[DEBUG] Processing stock: {ticker}, expected_return: {expected_return}, last_closing_price: {last_closing_price}")
             quantity = equal_value_per_stock / last_closing_price
             portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
         
@@ -121,8 +132,10 @@ def simulate_portfolio(retries=3):
                         equal_value_per_stock = total_portfolio_value / Decimal(10)
                         new_portfolio_value = []
                         
+                        print(f"[DEBUG] New portfolio for {date}: {new_portfolio}")
                         for row in new_portfolio:
                             ticker, expected_return, last_closing_price = row[:3]  # Unpack only necessary columns
+                            print(f"[DEBUG] Processing stock: {ticker}, expected_return: {expected_return}, last_closing_price: {last_closing_price}")
                             quantity = equal_value_per_stock / last_closing_price
                             new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
                         
