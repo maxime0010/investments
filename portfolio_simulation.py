@@ -6,9 +6,6 @@ from decimal import Decimal
 from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 import time
 
-# Define the minimum number of analysts required to consider a stock
-MIN_ANALYSTS = 5  # Adjust this value as per your logic
-
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
 if not mdp:
@@ -56,16 +53,17 @@ def get_closing_prices_as_of(cursor, date):
     print(f"[DEBUG] Retrieved closing prices: {result}")
     return result
 
-def fetch_portfolio_for_date(cursor, date):
+def fetch_portfolio_for_month(cursor, year, month):
+    """Fetch the portfolio for the first available date in the given month."""
     query = """
         SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis_simulation
-        WHERE date = %s AND num_combined_criteria >= %s
-        ORDER BY expected_return_combined_criteria DESC
+        WHERE YEAR(date) = %s AND MONTH(date) = %s AND num_combined_criteria >= %s
+        ORDER BY date ASC, expected_return_combined_criteria DESC
         LIMIT 10
     """
-    print(f"[DEBUG] Fetching portfolio for {date}")
-    cursor.execute(query, (date, MIN_ANALYSTS))
+    print(f"[DEBUG] Fetching portfolio for {year}-{month}")
+    cursor.execute(query, (year, month, MIN_ANALYSTS))
     result = cursor.fetchall()
     print(f"[DEBUG] Retrieved portfolio: {result}")
     return result
@@ -141,7 +139,11 @@ def simulate_portfolio(retries=3):
 
         # Initialize the first portfolio value (100 total, 10 per stock)
         initial_date = date_list[0]
-        initial_portfolio = fetch_portfolio_for_date(cursor, initial_date)
+        year = datetime.strptime(initial_date, '%Y-%m-%d').year
+        month = datetime.strptime(initial_date, '%Y-%m-%d').month
+
+        # Fetch portfolio for the first month
+        initial_portfolio = fetch_portfolio_for_month(cursor, year, month)
         closing_prices = get_closing_prices_as_of(cursor, initial_date)
         
         total_portfolio_value = Decimal(100)
@@ -157,12 +159,15 @@ def simulate_portfolio(retries=3):
             portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
         
         # Prepare data for the first batch insert
-        portfolio_data = [(initial_date, ranking + 1, ticker, stock_price, quantity, total_value)
-                          for ranking, (ticker, stock_price, quantity, total_value) in enumerate(portfolio_value)]
+        portfolio_data = [(initial_date, ranking + 1, ticker, last_closing_price, quantity, equal_value_per_stock)
+                          for ranking, (ticker, last_closing_price, quantity, _) in enumerate(portfolio_value)]
         batch_insert_portfolio_simulation(cursor, portfolio_data)
 
-        # Process for each subsequent date
+        # Process for each subsequent month
         for date in date_list[1:]:
+            year = datetime.strptime(date, '%Y-%m-%d').year
+            month = datetime.strptime(date, '%Y-%m-%d').month
+
             for attempt in range(retries):
                 try:
                     # Fetch closing prices as of this date
@@ -171,8 +176,8 @@ def simulate_portfolio(retries=3):
                     # Calculate the portfolio value based on the previous month
                     total_portfolio_value, portfolio_value = calculate_portfolio_value(cursor, date, portfolio_value, closing_prices)
                     
-                    # Fetch the new portfolio and rebalance
-                    new_portfolio = fetch_portfolio_for_date(cursor, date)
+                    # Fetch the new portfolio and rebalance for the current month
+                    new_portfolio = fetch_portfolio_for_month(cursor, year, month)
                     
                     if new_portfolio:
                         equal_value_per_stock = total_portfolio_value / Decimal(10)
@@ -186,8 +191,8 @@ def simulate_portfolio(retries=3):
                             new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
                         
                         # Prepare batch insert data
-                        portfolio_data = [(date, ranking + 1, ticker, stock_price, quantity, total_value)
-                                          for ranking, (ticker, stock_price, quantity, total_value) in enumerate(new_portfolio_value)]
+                        portfolio_data = [(date, ranking + 1, ticker, last_closing_price, quantity, equal_value_per_stock)
+                                          for ranking, (ticker, last_closing_price, quantity, _) in enumerate(new_portfolio_value)]
                         batch_insert_portfolio_simulation(cursor, portfolio_data)
 
                     # Update the previous portfolio with sell details
