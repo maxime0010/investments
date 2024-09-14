@@ -70,7 +70,7 @@ def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
     portfolio_value = []
     
     print(f"[DEBUG] Calculating portfolio value for {date}")
-    for ticker, quantity, _ in previous_portfolio:
+    for ticker, last_closing_price, quantity, _ in previous_portfolio:  # Adjusted to unpack 4 values
         last_closing_price = closing_price_dict.get(ticker, Decimal(0))
         if last_closing_price > 0:
             total_value_current = Decimal(quantity) * last_closing_price
@@ -105,7 +105,7 @@ def simulate_portfolio(retries=3):
         # For the first portfolio, we allocate 10 units to each stock
         print(f"[DEBUG] Initial portfolio: {initial_portfolio}")
         for row in initial_portfolio:
-            ticker, expected_return, last_closing_price = row[:3]  # Ensure you're unpacking the correct values
+            ticker, expected_return, last_closing_price = row[:3]
             print(f"[DEBUG] Processing stock: {ticker}, expected_return: {expected_return}, last_closing_price: {last_closing_price}")
             quantity = equal_value_per_stock / last_closing_price
             portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
@@ -134,7 +134,7 @@ def simulate_portfolio(retries=3):
                         
                         print(f"[DEBUG] New portfolio for {date}: {new_portfolio}")
                         for row in new_portfolio:
-                            ticker, expected_return, last_closing_price = row[:3]  # Unpack only necessary columns
+                            ticker, expected_return, last_closing_price = row[:3]
                             print(f"[DEBUG] Processing stock: {ticker}, expected_return: {expected_return}, last_closing_price: {last_closing_price}")
                             quantity = equal_value_per_stock / last_closing_price
                             new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
@@ -151,7 +151,7 @@ def simulate_portfolio(retries=3):
                     if err.errno == 1213:  # Deadlock error
                         print(f"Deadlock detected on {date}. Retrying... attempt {attempt + 1}")
                         conn.rollback()  # Rollback the transaction
-                        time.sleep(2)  # Wait before retrying
+                        time.sleep(2 ** attempt)  # Exponential backoff
                     else:
                         raise  # Re-raise other MySQL errors
 
