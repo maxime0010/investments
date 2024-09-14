@@ -3,6 +3,7 @@ import mysql.connector
 from datetime import datetime, timedelta
 from decimal import Decimal
 from config import MIN_ANALYSTS
+import time
 
 # Retrieve MySQL password from environment variables
 mdp = os.getenv("MYSQL_MDP")
@@ -78,7 +79,7 @@ def batch_insert_portfolio_simulation(cursor, portfolio_data):
     """
     cursor.executemany(query, portfolio_data)
 
-def simulate_portfolio():
+def simulate_portfolio(retries=3):
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -93,7 +94,8 @@ def simulate_portfolio():
         portfolio_value = []
 
         # For the first portfolio, we allocate 10 units to each stock
-        for ticker, expected_return, last_closing_price in initial_portfolio:
+        for row in initial_portfolio:
+            ticker, expected_return, last_closing_price = row[:3]  # Ensure you're unpacking the correct values
             quantity = equal_value_per_stock / last_closing_price
             portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
         
@@ -104,29 +106,42 @@ def simulate_portfolio():
 
         # Process for each subsequent date
         for date in date_list[1:]:
-            # Fetch closing prices as of this date
-            closing_prices = get_closing_prices_as_of(cursor, date)
-            
-            # Calculate the portfolio value based on the previous week
-            total_portfolio_value, portfolio_value = calculate_portfolio_value(cursor, date, portfolio_value, closing_prices)
-            
-            # Fetch the new portfolio and rebalance
-            new_portfolio = fetch_portfolio_for_date(cursor, date)
-            
-            if new_portfolio:
-                equal_value_per_stock = total_portfolio_value / Decimal(10)
-                new_portfolio_value = []
-                
-                for ticker, expected_return, last_closing_price in new_portfolio:
-                    quantity = equal_value_per_stock / last_closing_price
-                    new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
-                
-                # Prepare batch insert data
-                portfolio_data = [(date, ranking + 1, ticker, stock_price, quantity, total_value, total_portfolio_value)
-                                  for ranking, (ticker, stock_price, quantity, total_value) in enumerate(new_portfolio_value)]
-                batch_insert_portfolio_simulation(cursor, portfolio_data)
-        
-        conn.commit()
+            for attempt in range(retries):
+                try:
+                    # Fetch closing prices as of this date
+                    closing_prices = get_closing_prices_as_of(cursor, date)
+                    
+                    # Calculate the portfolio value based on the previous week
+                    total_portfolio_value, portfolio_value = calculate_portfolio_value(cursor, date, portfolio_value, closing_prices)
+                    
+                    # Fetch the new portfolio and rebalance
+                    new_portfolio = fetch_portfolio_for_date(cursor, date)
+                    
+                    if new_portfolio:
+                        equal_value_per_stock = total_portfolio_value / Decimal(10)
+                        new_portfolio_value = []
+                        
+                        for row in new_portfolio:
+                            ticker, expected_return, last_closing_price = row[:3]  # Unpack only necessary columns
+                            quantity = equal_value_per_stock / last_closing_price
+                            new_portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
+                        
+                        # Prepare batch insert data
+                        portfolio_data = [(date, ranking + 1, ticker, stock_price, quantity, total_value, total_portfolio_value)
+                                          for ranking, (ticker, stock_price, quantity, total_value) in enumerate(new_portfolio_value)]
+                        batch_insert_portfolio_simulation(cursor, portfolio_data)
+
+                    conn.commit()
+                    break  # Break the retry loop if successful
+
+                except mysql.connector.Error as err:
+                    if err.errno == 1213:  # Deadlock error
+                        print(f"Deadlock detected on {date}. Retrying... attempt {attempt + 1}")
+                        conn.rollback()  # Rollback the transaction
+                        time.sleep(2)  # Wait before retrying
+                    else:
+                        raise  # Re-raise other MySQL errors
+
         cursor.close()
         conn.close()
 
