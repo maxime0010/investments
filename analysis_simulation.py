@@ -130,8 +130,11 @@ def simulate_portfolio_performance():
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
+    # Start date: September 1, 2019
     start_date = datetime(2019, 9, 1)
-    end_date = datetime.now()
+    # End date: December 31, 2019 (limit the simulation to 2019)
+    end_date = datetime(2019, 12, 31)
+
     current_date = start_date
 
     try:
