@@ -1,7 +1,6 @@
 import os
 import mysql.connector
-from datetime import datetime
-from dateutil.relativedelta import relativedelta  # Ensure this is imported for monthly intervals
+from datetime import datetime, timedelta  # Import timedelta for weekly intervals
 from decimal import Decimal
 from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 import time
@@ -23,16 +22,16 @@ db_config = {
     'port': 25060
 }
 
-# Generate a list of dates from January 17, 2021, to today with one-month intervals
+# Generate a list of dates from January 17, 2021, to today with one-week intervals
 START_DATE = datetime(2021, 1, 17)
 END_DATE = datetime.now()
 date_list = []
 current_date = START_DATE
 
-# Only add one date per month
+# Add one date per week (weekly intervals)
 while current_date <= END_DATE:
     date_list.append(current_date.strftime('%Y-%m-%d'))
-    current_date += relativedelta(months=1)  # Ensure monthly increments
+    current_date += timedelta(weeks=1)  # Ensure weekly increments
 
 def get_closing_prices_as_of(cursor, date):
     query = """
@@ -53,17 +52,17 @@ def get_closing_prices_as_of(cursor, date):
     print(f"[DEBUG] Retrieved closing prices: {result}")
     return result
 
-def fetch_portfolio_for_month(cursor, year, month):
-    """Fetch the portfolio for the first available date in the given month."""
+def fetch_portfolio_for_week(cursor, date):
+    """Fetch the portfolio for the first available date in the given week."""
     query = """
         SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis_simulation
-        WHERE YEAR(date) = %s AND MONTH(date) = %s AND num_combined_criteria >= %s
-        ORDER BY date ASC, expected_return_combined_criteria DESC
+        WHERE date = %s AND num_combined_criteria >= %s
+        ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """
-    print(f"[DEBUG] Fetching portfolio for {year}-{month}")
-    cursor.execute(query, (year, month, MIN_ANALYSTS))
+    print(f"[DEBUG] Fetching portfolio for {date}")
+    cursor.execute(query, (date, MIN_ANALYSTS))
     result = cursor.fetchall()
     print(f"[DEBUG] Retrieved portfolio: {result}")
     return result
@@ -139,11 +138,9 @@ def simulate_portfolio(retries=3):
 
         # Initialize the first portfolio value (100 total, 10 per stock)
         initial_date = date_list[0]
-        year = datetime.strptime(initial_date, '%Y-%m-%d').year
-        month = datetime.strptime(initial_date, '%Y-%m-%d').month
 
-        # Fetch portfolio for the first month
-        initial_portfolio = fetch_portfolio_for_month(cursor, year, month)
+        # Fetch portfolio for the first week
+        initial_portfolio = fetch_portfolio_for_week(cursor, initial_date)
         closing_prices = get_closing_prices_as_of(cursor, initial_date)
         
         total_portfolio_value = Decimal(100)
@@ -163,21 +160,18 @@ def simulate_portfolio(retries=3):
                           for ranking, (ticker, last_closing_price, quantity, _) in enumerate(portfolio_value)]
         batch_insert_portfolio_simulation(cursor, portfolio_data)
 
-        # Process for each subsequent month
+        # Process for each subsequent week
         for date in date_list[1:]:
-            year = datetime.strptime(date, '%Y-%m-%d').year
-            month = datetime.strptime(date, '%Y-%m-%d').month
-
             for attempt in range(retries):
                 try:
                     # Fetch closing prices as of this date
                     closing_prices = get_closing_prices_as_of(cursor, date)
                     
-                    # Calculate the portfolio value based on the previous month
+                    # Calculate the portfolio value based on the previous week
                     total_portfolio_value, portfolio_value = calculate_portfolio_value(cursor, date, portfolio_value, closing_prices)
                     
-                    # Fetch the new portfolio and rebalance for the current month
-                    new_portfolio = fetch_portfolio_for_month(cursor, year, month)
+                    # Fetch the new portfolio and rebalance for the current week
+                    new_portfolio = fetch_portfolio_for_week(cursor, date)
                     
                     if new_portfolio:
                         equal_value_per_stock = total_portfolio_value / Decimal(10)
