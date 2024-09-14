@@ -2,6 +2,7 @@ import os
 import mysql.connector
 from datetime import datetime, timedelta
 from decimal import Decimal
+from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 import time
 
 # Retrieve MySQL password from environment variables
