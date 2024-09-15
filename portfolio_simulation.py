@@ -31,7 +31,6 @@ def get_existing_latest_record(cursor):
     query = "SELECT MAX(date) FROM portfolio_simulation"
     cursor.execute(query)
     latest_record = cursor.fetchone()[0]
-    print(f"[DEBUG] Latest record in the database: {latest_record}")
     return latest_record
 
 def generate_date_list(start_date, end_date):
@@ -41,7 +40,6 @@ def generate_date_list(start_date, end_date):
     while current_date <= end_date:
         date_list.append(current_date.strftime('%Y-%m-%d'))
         current_date += timedelta(weeks=1)
-    print(f"[DEBUG] Generated date list: {date_list}")
     return date_list
 
 def get_closing_prices_as_of(cursor, date):
@@ -59,9 +57,7 @@ def get_closing_prices_as_of(cursor, date):
         )
     """
     cursor.execute(query, (date,))
-    prices = cursor.fetchall()
-    print(f"[DEBUG] Closing prices as of {date}: {prices}")
-    return prices
+    return cursor.fetchall()
 
 def fetch_portfolio_for_date(cursor, date):
     """Fetch the top 10 stocks to simulate the portfolio for a given date."""
@@ -75,9 +71,7 @@ def fetch_portfolio_for_date(cursor, date):
         LIMIT 10
     """
     cursor.execute(query, (date, MIN_ANALYSTS))
-    portfolio = cursor.fetchall()
-    print(f"[DEBUG] Fetched portfolio for {date}: {portfolio}")
-    return portfolio
+    return cursor.fetchall()
 
 def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
     """Calculate the value of the portfolio based on the previous week's portfolio and new closing prices."""
@@ -91,7 +85,6 @@ def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
             total_value_current = Decimal(quantity) * last_closing_price
             portfolio_value.append((ticker, last_closing_price, quantity, total_value_current))
             total_value += total_value_current
-    print(f"[DEBUG] Portfolio value for {date}: {portfolio_value}, Total: {total_value}")
     return total_value, portfolio_value
 
 def batch_insert_portfolio_simulation(cursor, portfolio_data):
@@ -101,7 +94,6 @@ def batch_insert_portfolio_simulation(cursor, portfolio_data):
         VALUES (%s, %s, %s, %s, %s, %s)
     """
     cursor.executemany(query, portfolio_data)
-    print(f"[DEBUG] Inserted portfolio data: {portfolio_data}")
 
 def simulate_portfolio(retries=3):
     """Main function to simulate the portfolio process."""
@@ -129,16 +121,9 @@ def simulate_portfolio(retries=3):
             print("[DEBUG] No new dates to process.")
             return
 
-        print(f"[DEBUG] Processing dates: {date_list}")
-
         # Initialize the first portfolio value (100 total, 10 per stock)
         initial_date = date_list[0]
-        print(f"[DEBUG] Initial date for portfolio: {initial_date}")
         initial_portfolio = fetch_portfolio_for_date(cursor, initial_date)
-        if not initial_portfolio:
-            print(f"[DEBUG] No portfolio data available for {initial_date}")
-            return
-
         closing_prices = get_closing_prices_as_of(cursor, initial_date)
         
         total_portfolio_value = Decimal(100)
@@ -151,8 +136,6 @@ def simulate_portfolio(retries=3):
             quantity = equal_value_per_stock / last_closing_price
             portfolio_value.append((ticker, last_closing_price, quantity, equal_value_per_stock))
         
-        print(f"[DEBUG] Initial portfolio for {initial_date}: {portfolio_value}")
-        
         # Prepare data for the first batch insert
         portfolio_data = [(initial_date, ranking + 1, ticker, stock_price, quantity, total_value)
                           for ranking, (ticker, stock_price, quantity, total_value) in enumerate(portfolio_value)]
@@ -162,8 +145,6 @@ def simulate_portfolio(retries=3):
         for date in date_list[1:]:
             for attempt in range(retries):
                 try:
-                    print(f"[DEBUG] Processing date: {date}")
-
                     # Fetch closing prices as of this date
                     closing_prices = get_closing_prices_as_of(cursor, date)
                     
@@ -213,6 +194,9 @@ def simulate_portfolio(retries=3):
             conn.rollback()
         cursor.close()
         conn.close()
+
+# Run the simulation
+simulate_portfolio()
 
 # Run the simulation
 simulate_portfolio()
