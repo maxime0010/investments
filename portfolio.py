@@ -86,6 +86,7 @@ def fetch_new_portfolio(cursor):
         SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis_simulation
         WHERE num_combined_criteria >= %s
+        AND stddev_combined_criteria <= 100  -- New criterion: standard deviation <= 100
         ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """, (MIN_ANALYSTS,))
