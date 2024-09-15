@@ -126,8 +126,11 @@ def calculate_and_insert_simulated_analysis(cursor, target_statistics, closing_p
         if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
             
-            # Convert last_update_date to date object
-            days_since_last_update = (analysis_date - last_update_date.date()).days
+            # Check if last_update_date is a datetime object before calling .date()
+            if isinstance(last_update_date, datetime):
+                days_since_last_update = (analysis_date - last_update_date.date()).days
+            else:
+                days_since_last_update = (analysis_date - last_update_date).days
 
             expected_return_recent = None
             if average_price_target_recent is not None:
@@ -152,6 +155,7 @@ def calculate_and_insert_simulated_analysis(cursor, target_statistics, closing_p
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     cursor.executemany(insert_query, analysis_data)
+    
 
 def simulate_portfolio_performance():
     conn = mysql.connector.connect(**db_config)
