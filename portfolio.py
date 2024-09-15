@@ -36,7 +36,9 @@ def get_last_closing_price(cursor):
         )
     """
     cursor.execute(query)
-    return cursor.fetchall()
+    closing_prices = cursor.fetchall()
+    print(f"[DEBUG] Retrieved closing prices: {closing_prices}")
+    return closing_prices
 
 def update_existing_portfolio_simulation(cursor, today, closing_prices):
     """Update the most recent existing portfolio simulation with the latest closing prices."""
@@ -52,6 +54,8 @@ def update_existing_portfolio_simulation(cursor, today, closing_prices):
 
     cursor.execute("SELECT ticker, quantity, total_value FROM portfolio_simulation WHERE date = %s", (latest_portfolio_date,))
     existing_portfolio = cursor.fetchall()
+
+    print(f"[DEBUG] Retrieved existing portfolio for date {latest_portfolio_date}: {existing_portfolio}")
 
     for ticker, quantity, total_value in existing_portfolio:
         latest_closing_price = closing_price_dict.get(ticker, Decimal(0))
@@ -70,6 +74,8 @@ def update_existing_portfolio_simulation(cursor, today, closing_prices):
         total_value_sell = quantity * latest_closing_price
         total_value = Decimal(total_value)
         evolution = total_value_sell - total_value
+
+        print(f"[DEBUG] Updating {ticker}: Quantity={quantity}, Latest Price={latest_closing_price}, Sell Value={total_value_sell}, Evolution={evolution}")
 
         cursor.execute("""
             UPDATE portfolio_simulation
@@ -90,7 +96,9 @@ def fetch_new_portfolio(cursor):
         ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """, (MIN_ANALYSTS,))
-    return cursor.fetchall()
+    new_portfolio = cursor.fetchall()
+    print(f"[DEBUG] Fetched new portfolio: {new_portfolio}")
+    return new_portfolio
 
 def insert_new_portfolio_simulation(cursor, today, new_portfolio, closing_prices):
     """Insert the new portfolio simulation for the current date."""
@@ -100,6 +108,8 @@ def insert_new_portfolio_simulation(cursor, today, new_portfolio, closing_prices
     cursor.execute("SELECT SUM(total_value_sell) FROM portfolio_simulation WHERE date_sell = %s", (today,))
     aggregated_total_value_sell = Decimal(cursor.fetchone()[0] or 0)
     equal_value_per_stock = aggregated_total_value_sell / Decimal(10)
+
+    print(f"[DEBUG] Aggregated total value from sell: {aggregated_total_value_sell}, Equal value per stock: {equal_value_per_stock}")
 
     for ranking, (ticker, expected_return, _) in enumerate(new_portfolio, start=1):
         last_closing_price = closing_price_dict.get(ticker, Decimal(0))
@@ -116,6 +126,8 @@ def insert_new_portfolio_simulation(cursor, today, new_portfolio, closing_prices
 
         total_value = equal_value_per_stock
         quantity = total_value / last_closing_price
+
+        print(f"[DEBUG] Inserting {ticker}: Ranking={ranking}, Price={last_closing_price}, Quantity={quantity}, Total Value={total_value}")
 
         cursor.execute("""
             INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value)
