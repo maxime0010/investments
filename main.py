@@ -22,5 +22,6 @@ def run_script(script_name):
 # run_script("price_target_history.py")
 
 run_script("analysis_simulation.py")
-run_script("portfolio_simulation.py")
+# run_script("portfolio_simulation.py")
+run_script("portfolio.py")
 
