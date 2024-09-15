@@ -20,6 +20,17 @@ db_config = {
     'port': 25060
 }
 
+def get_latest_simulation_date(cursor):
+    """Fetch the latest simulation date from the analysis_simulation table."""
+    query = "SELECT MAX(date) FROM analysis_simulation"
+    cursor.execute(query)
+    latest_date = cursor.fetchone()[0]
+    if latest_date is None:
+        # If no simulation data exists, start from the initial date
+        return datetime(2019, 9, 1).date()  # Adjust the start date as needed
+    else:
+        return latest_date
+
 def calculate_price_target_statistics(cursor, analysis_date):
     # Adjust query to use the specific date for historical simulation
     query = f"""
@@ -130,7 +141,11 @@ def simulate_portfolio_performance():
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor()
 
-    start_date = datetime(2019, 9, 1)
+    # Get the latest date from the simulation table
+    latest_simulation_date = get_latest_simulation_date(cursor)
+    print(f"Latest simulation date: {latest_simulation_date}")
+
+    start_date = latest_simulation_date + timedelta(weeks=1)  # Start from one week after the latest simulation date
     end_date = datetime.now()
     current_date = start_date
 
