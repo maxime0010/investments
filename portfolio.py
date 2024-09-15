@@ -87,15 +87,29 @@ def update_existing_portfolio_simulation(cursor, today, closing_prices):
         """, (today, latest_closing_price, total_value_sell, evolution, ticker, latest_portfolio_date))
 
 def fetch_new_portfolio(cursor):
-    """Fetch the top 10 stocks based on analysis."""
+    """Fetch the top 10 stocks from the latest available date in the analysis_simulation table."""
+    
+    # Step 1: Get the latest date from the analysis_simulation table
+    cursor.execute("SELECT MAX(date) FROM analysis_simulation")
+    latest_date = cursor.fetchone()[0]
+
+    if latest_date is None:
+        print("[DEBUG] No records found in analysis_simulation.")
+        return []  # Return an empty list if no data is found
+
+    print(f"[DEBUG] Latest date in analysis_simulation: {latest_date}")
+
+    # Step 2: Fetch the top 10 stocks from the latest date
     cursor.execute("""
         SELECT ticker, expected_return_combined_criteria, last_closing_price
         FROM analysis_simulation
         WHERE num_combined_criteria >= %s
         AND stddev_combined_criteria <= 100  -- New criterion: standard deviation <= 100
+        AND date = %s
         ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
-    """, (MIN_ANALYSTS,))
+    """, (MIN_ANALYSTS, latest_date))
+
     new_portfolio = cursor.fetchall()
     print(f"[DEBUG] Fetched new portfolio: {new_portfolio}")
     return new_portfolio
