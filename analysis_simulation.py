@@ -29,9 +29,13 @@ def get_latest_simulation_date(cursor):
         # If no simulation data exists, start from the initial date
         return datetime(2019, 9, 1).date()  # Adjust the start date as needed
     else:
-        return latest_date
+        return latest_date.date()  # Ensure the returned date is a datetime.date object
 
 def calculate_price_target_statistics(cursor, analysis_date):
+    # Ensure analysis_date is passed as a date object
+    if isinstance(analysis_date, datetime):
+        analysis_date = analysis_date.date()
+
     # Adjust query to use the specific date for historical simulation
     query = f"""
         SELECT 
@@ -71,6 +75,10 @@ def calculate_price_target_statistics(cursor, analysis_date):
     return cursor.fetchall()
 
 def get_closing_price_as_of(cursor, analysis_date):
+    # Ensure analysis_date is passed as a date object
+    if isinstance(analysis_date, datetime):
+        analysis_date = analysis_date.date()
+
     query = """
         SELECT 
             ticker,
@@ -87,6 +95,10 @@ def get_closing_price_as_of(cursor, analysis_date):
     return cursor.fetchall()
 
 def calculate_and_insert_simulated_analysis(cursor, target_statistics, closing_prices, analysis_date):
+    # Ensure analysis_date is passed as a date object
+    if isinstance(analysis_date, datetime):
+        analysis_date = analysis_date.date()
+
     analysis_data = []
     closing_price_dict = {price[0]: price[1] for price in closing_prices}
     
@@ -112,7 +124,7 @@ def calculate_and_insert_simulated_analysis(cursor, target_statistics, closing_p
         if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
             
-            # Convert last_update_date to a date object for proper comparison
+            # Convert last_update_date to date object
             days_since_last_update = (analysis_date - last_update_date.date()).days
 
             expected_return_recent = None
@@ -148,19 +160,19 @@ def simulate_portfolio_performance():
     print(f"Latest simulation date: {latest_simulation_date}")
 
     start_date = latest_simulation_date + timedelta(weeks=1)  # Start from one week after the latest simulation date
-    end_date = datetime.now()
+    end_date = datetime.now().date()  # Ensure end_date is a date object
     current_date = start_date
 
     try:
         while current_date <= end_date:
-            print(f"Running simulation for {current_date.date()}...")
+            print(f"Running simulation for {current_date}...")
             
             # Calculate statistics and prices as of the current date
             target_statistics = calculate_price_target_statistics(cursor, current_date)
             closing_prices = get_closing_price_as_of(cursor, current_date)
 
             # Insert the analysis results into the simulation table
-            calculate_and_insert_simulated_analysis(cursor, target_statistics, closing_prices, current_date.date())
+            calculate_and_insert_simulated_analysis(cursor, target_statistics, closing_prices, current_date)
 
             # Move to the next week
             current_date += timedelta(weeks=1)
