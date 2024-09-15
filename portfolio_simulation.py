@@ -23,8 +23,8 @@ db_config = {
 }
 
 # Generate a list of dates from January 17, 2021, to today with one-week intervals
-START_DATE = datetime(2021, 1, 17)
-END_DATE = datetime.now()
+START_DATE = datetime(2021, 1, 17).date()  # Ensure START_DATE is a date
+END_DATE = datetime.now().date()  # Ensure END_DATE is a date, stripping time
 
 def get_existing_latest_record(cursor):
     """Fetch the latest record date from the portfolio_simulation table."""
@@ -110,6 +110,7 @@ def simulate_portfolio(retries=3):
             date_list = generate_date_list(START_DATE, END_DATE)
         else:
             # If table is not empty, simulate from the latest record until today
+            latest_record = latest_record.date()  # Convert latest_record to a date object if it's a datetime
             print(f"[DEBUG] The table has records. Starting from {latest_record + timedelta(weeks=1)}.")
             start_date = latest_record + timedelta(weeks=1)
             date_list = generate_date_list(start_date, END_DATE)
