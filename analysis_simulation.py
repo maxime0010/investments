@@ -28,8 +28,10 @@ def get_latest_simulation_date(cursor):
     if latest_date is None:
         # If no simulation data exists, start from the initial date
         return datetime(2019, 9, 1).date()  # Adjust the start date as needed
+    elif isinstance(latest_date, datetime):
+        return latest_date.date()  # Convert to date if it's a datetime object
     else:
-        return latest_date.date()  # Ensure the returned date is a datetime.date object
+        return latest_date  # Already a date object
 
 def calculate_price_target_statistics(cursor, analysis_date):
     # Ensure analysis_date is passed as a date object
