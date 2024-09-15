@@ -188,6 +188,7 @@ def simulate_portfolio(retries=3):
                         batch_insert_portfolio_simulation(cursor, portfolio_data)
 
                     conn.commit()
+                    print(f"[DEBUG] Successfully committed portfolio data for {date}")
                     break  # Break the retry loop if successful
 
                 except mysql.connector.Error as err:
