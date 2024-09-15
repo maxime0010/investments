@@ -1,3 +1,100 @@
+import os
+import mysql.connector
+from datetime import datetime, timedelta
+from decimal import Decimal
+from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
+import time
+
+# Retrieve MySQL password from environment variables
+mdp = os.getenv("MYSQL_MDP")
+if not mdp:
+    raise ValueError("No MySQL password found in environment variables")
+host = os.getenv("MYSQL_HOST")
+if not host:
+    raise ValueError("No Host found in environment variables")
+
+# Database connection configuration
+db_config = {
+    'user': 'doadmin',
+    'password': mdp,
+    'host': host,
+    'database': 'defaultdb',
+    'port': 25060
+}
+
+# Generate a list of dates from January 17, 2021, to today with one-week intervals
+START_DATE = datetime(2021, 1, 17).date()  # Ensure START_DATE is a date
+END_DATE = datetime.now().date()  # Ensure END_DATE is a date, stripping time
+
+def get_existing_latest_record(cursor):
+    """Fetch the latest record date from the portfolio_simulation table."""
+    query = "SELECT MAX(date) FROM portfolio_simulation"
+    cursor.execute(query)
+    latest_record = cursor.fetchone()[0]
+    return latest_record
+
+def generate_date_list(start_date, end_date):
+    """Generate a list of weekly dates from the start date to the end date."""
+    date_list = []
+    current_date = start_date
+    while current_date <= end_date:
+        date_list.append(current_date.strftime('%Y-%m-%d'))
+        current_date += timedelta(weeks=1)
+    return date_list
+
+def get_closing_prices_as_of(cursor, date):
+    """Fetch the closing prices for all stocks as of a given date."""
+    query = """
+        SELECT 
+            ticker,
+            CAST(close AS DECIMAL(10, 2)) AS closing_price
+        FROM prices
+        WHERE (ticker, date) IN (
+            SELECT ticker, MAX(date) 
+            FROM prices 
+            WHERE date <= %s
+            GROUP BY ticker
+        )
+    """
+    cursor.execute(query, (date,))
+    return cursor.fetchall()
+
+def fetch_portfolio_for_date(cursor, date):
+    """Fetch the top 10 stocks to simulate the portfolio for a given date."""
+    query = """
+        SELECT ticker, expected_return_combined_criteria, last_closing_price
+        FROM analysis_simulation
+        WHERE date = %s 
+        AND num_combined_criteria >= %s
+        AND stddev_combined_criteria <= 100  -- Standard deviation criterion
+        ORDER BY expected_return_combined_criteria DESC
+        LIMIT 10
+    """
+    cursor.execute(query, (date, MIN_ANALYSTS))
+    return cursor.fetchall()
+
+def calculate_portfolio_value(cursor, date, previous_portfolio, closing_prices):
+    """Calculate the value of the portfolio based on the previous week's portfolio and new closing prices."""
+    closing_price_dict = {ticker: price for ticker, price in closing_prices}
+    total_value = 0
+    portfolio_value = []
+
+    for ticker, last_closing_price, quantity, _ in previous_portfolio:
+        last_closing_price = closing_price_dict.get(ticker, Decimal(0))
+        if last_closing_price > 0:
+            total_value_current = Decimal(quantity) * last_closing_price
+            portfolio_value.append((ticker, last_closing_price, quantity, total_value_current))
+            total_value += total_value_current
+    return total_value, portfolio_value
+
+def batch_insert_portfolio_simulation(cursor, portfolio_data):
+    """Insert the simulated portfolio data into the portfolio_simulation table."""
+    query = """
+        INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    cursor.executemany(query, portfolio_data)
+
 def simulate_portfolio(retries=3):
     """Main function to simulate the portfolio process."""
     try:
@@ -97,6 +194,9 @@ def simulate_portfolio(retries=3):
             conn.rollback()
         cursor.close()
         conn.close()
+
+# Run the simulation
+simulate_portfolio()
 
 # Run the simulation
 simulate_portfolio()
