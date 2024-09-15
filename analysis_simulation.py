@@ -111,8 +111,10 @@ def calculate_and_insert_simulated_analysis(cursor, target_statistics, closing_p
         
         if last_closing_price is not None and average_price_target is not None:
             expected_return = ((average_price_target - last_closing_price) / last_closing_price) * 100
-            days_since_last_update = (analysis_date - last_update_date).days
             
+            # Convert last_update_date to a date object for proper comparison
+            days_since_last_update = (analysis_date - last_update_date.date()).days
+
             expected_return_recent = None
             if average_price_target_recent is not None:
                 expected_return_recent = ((average_price_target_recent - last_closing_price) / last_closing_price) * 100
