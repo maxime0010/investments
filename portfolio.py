@@ -1,7 +1,8 @@
 import os
 import mysql.connector
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
+import time
 from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
 
 # Retrieve MySQL password from environment variables
@@ -21,11 +22,8 @@ db_config = {
     'port': 25060
 }
 
-def get_latest_closing_date(cursor):
-    cursor.execute("SELECT MAX(date) FROM prices")
-    return cursor.fetchone()[0]
-
 def get_last_closing_price(cursor):
+    """Fetch the most recent closing prices for all stocks."""
     query = """
         SELECT 
             ticker,
@@ -40,21 +38,19 @@ def get_last_closing_price(cursor):
     cursor.execute(query)
     return cursor.fetchall()
 
-def get_existing_portfolio(cursor, date):
-    cursor.execute("SELECT ranking, ticker, quantity, total_value FROM portfolio WHERE date = %s", (date,))
-    return cursor.fetchall()
-
-def update_existing_portfolio(cursor, today, closing_prices):
+def update_existing_portfolio_simulation(cursor, today, closing_prices):
+    """Update the most recent existing portfolio simulation with the latest closing prices."""
     closing_price_dict = {ticker: Decimal(price) for ticker, price in closing_prices}
 
-    # Update the most recent existing portfolio
-    cursor.execute("SELECT MAX(date) FROM portfolio WHERE date < %s", (today,))
+    # Get the most recent portfolio to update
+    cursor.execute("SELECT MAX(date) FROM portfolio_simulation WHERE date < %s", (today,))
     latest_portfolio_date = cursor.fetchone()[0]
 
     if not latest_portfolio_date:
+        print("[DEBUG] No previous portfolio to update.")
         return  # No previous portfolio to update
 
-    cursor.execute("SELECT ticker, quantity, total_value FROM portfolio WHERE date = %s", (latest_portfolio_date,))
+    cursor.execute("SELECT ticker, quantity, total_value FROM portfolio_simulation WHERE date = %s", (latest_portfolio_date,))
     existing_portfolio = cursor.fetchall()
 
     for ticker, quantity, total_value in existing_portfolio:
@@ -70,13 +66,13 @@ def update_existing_portfolio(cursor, today, closing_prices):
             """, (ticker,))
             latest_closing_price = Decimal(cursor.fetchone()[0])
 
-        quantity = Decimal(quantity)  # Ensure quantity is a Decimal
+        quantity = Decimal(quantity)
         total_value_sell = quantity * latest_closing_price
-        total_value = Decimal(total_value)  # Ensure total_value is a Decimal
+        total_value = Decimal(total_value)
         evolution = total_value_sell - total_value
 
         cursor.execute("""
-            UPDATE portfolio
+            UPDATE portfolio_simulation
             SET date_sell = %s, 
                 stock_price_sell = %s, 
                 total_value_sell = %s, 
@@ -84,10 +80,23 @@ def update_existing_portfolio(cursor, today, closing_prices):
             WHERE ticker = %s AND date = %s
         """, (today, latest_closing_price, total_value_sell, evolution, ticker, latest_portfolio_date))
 
-def insert_new_portfolio(cursor, today, new_portfolio, closing_prices):
+def fetch_new_portfolio(cursor):
+    """Fetch the top 10 stocks based on analysis."""
+    cursor.execute("""
+        SELECT ticker, expected_return_combined_criteria, last_closing_price
+        FROM analysis_simulation
+        WHERE num_combined_criteria >= %s
+        ORDER BY expected_return_combined_criteria DESC
+        LIMIT 10
+    """, (MIN_ANALYSTS,))
+    return cursor.fetchall()
+
+def insert_new_portfolio_simulation(cursor, today, new_portfolio, closing_prices):
+    """Insert the new portfolio simulation for the current date."""
     closing_price_dict = {ticker: Decimal(price) for ticker, price in closing_prices}
 
-    cursor.execute("SELECT SUM(total_value_sell) FROM portfolio WHERE date_sell = %s", (today,))
+    # Get the total value from selling the previous portfolio
+    cursor.execute("SELECT SUM(total_value_sell) FROM portfolio_simulation WHERE date_sell = %s", (today,))
     aggregated_total_value_sell = Decimal(cursor.fetchone()[0] or 0)
     equal_value_per_stock = aggregated_total_value_sell / Decimal(10)
 
@@ -108,39 +117,46 @@ def insert_new_portfolio(cursor, today, new_portfolio, closing_prices):
         quantity = total_value / last_closing_price
 
         cursor.execute("""
-            INSERT INTO portfolio (date, ranking, ticker, stock_price, quantity, total_value)
+            INSERT INTO portfolio_simulation (date, ranking, ticker, stock_price, quantity, total_value)
             VALUES (%s, %s, %s, %s, %s, %s)
         """, (today, ranking, ticker, last_closing_price, quantity, total_value))
 
-def fetch_new_portfolio(cursor):
-    cursor.execute("""
-        SELECT ticker, expected_return_combined_criteria, last_closing_price
-        FROM analysis
-        WHERE num_combined_criteria >= %s
-        ORDER BY expected_return_combined_criteria DESC
-        LIMIT 10
-    """, (MIN_ANALYSTS,))
-    return cursor.fetchall()
-
 # Execution
 try:
-    conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor()
+    # Check if today is Sunday (6 = Sunday in weekday() method)
+    if datetime.today().weekday() == 6:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
 
-    today = datetime.today().date()
-    closing_prices = get_last_closing_price(cursor)
+        today = datetime.today().date()
+        closing_prices = get_last_closing_price(cursor)
 
-    # Step 1: Update the most recent existing portfolio
-    update_existing_portfolio(cursor, today, closing_prices)
+        # Step 1: Update the most recent existing portfolio in portfolio_simulation
+        update_existing_portfolio_simulation(cursor, today, closing_prices)
 
-    # Step 2: Create and insert the new portfolio
-    new_portfolio = fetch_new_portfolio(cursor)
-    insert_new_portfolio(cursor, today, new_portfolio, closing_prices)
+        # Step 2: Fetch the new portfolio based on analysis_simulation
+        new_portfolio = fetch_new_portfolio(cursor)
+        if new_portfolio:
+            # Step 3: Insert the new portfolio into portfolio_simulation
+            insert_new_portfolio_simulation(cursor, today, new_portfolio, closing_prices)
 
-    conn.commit()
+        # Commit the changes to the database
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+    else:
+        print(f"[DEBUG] Today is not Sunday. Portfolio update will not run. Today is {datetime.today().strftime('%A')}.")
+
+except mysql.connector.Error as err:
+    print(f"Database error: {err}")
+    if conn:
+        conn.rollback()
     cursor.close()
     conn.close()
-except mysql.connector.Error as err:
-    print(f"Error: {err}")
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
+    if conn:
+        conn.rollback()
+    cursor.close()
+    conn.close()
