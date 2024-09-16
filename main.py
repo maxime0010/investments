@@ -23,7 +23,7 @@ run_script("stock_price.py")
 
 # run_script("portfolio_simulation.py")
 
-Latest version
+# Latest version
 # run_script("analysis_simulation.py")
 # run_script("portfolio.py")
 
