@@ -36,6 +36,19 @@ except mysql.connector.Error as err:
     print(f"Error: {err}")
     sys.exit()
 
+# Function to fetch the latest 10 tickers from 'portfolio_simulation' table
+def fetch_latest_tickers():
+    query = """
+        SELECT DISTINCT ticker
+        FROM portfolio_simulation
+        ORDER BY date DESC
+        LIMIT 10
+    """
+    cursor.execute(query)
+    result = cursor.fetchall()
+    tickers = [row[0] for row in result]
+    return tickers
+
 # Function to fetch expected return from 'analysis_simulation' table
 def fetch_expected_return(ticker):
     query = """
@@ -64,10 +77,11 @@ def is_recent_entry(ticker):
         return last_entry_date >= one_week_ago
     return False
 
-# Function to generate recommendations using ChatGPT as the top analyst
-def generate_recommendations(ticker, expected_return):
+# Function to generate recommendations using ChatGPT in a neutral tone (without mentioning expected return)
+def generate_recommendations(ticker):
     # Generate short recommendation
-    short_prompt = f"You are a top analyst. Based on public information and the expected return of {expected_return}% for {ticker}, give a short 20-word recommendation."
+    short_prompt = (f"Provide a neutral and objective 20-word recommendation for the stock {ticker} "
+                    "based on public information and market trends.")
     short_response = openai_client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": short_prompt}]
@@ -75,7 +89,9 @@ def generate_recommendations(ticker, expected_return):
     short_recommendation = short_response.choices[0].message.content
 
     # Generate long recommendation
-    long_prompt = f"As a top analyst, give a detailed 200-word recommendation for {ticker}. The expected return is {expected_return}%. Use public information and market trends to justify your analysis."
+    long_prompt = (f"Provide a neutral, 200-word stock analysis for {ticker}, "
+                   "focusing on public information, market trends, and company performance. "
+                   "The analysis should be factual and descriptive without using first-person pronouns.")
     long_response = openai_client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": long_prompt}]
@@ -95,7 +111,9 @@ def insert_recommendation(ticker, short_recommendation, long_recommendation):
     conn.commit()
 
 # Main script to process stock data
-def process_stocks(tickers):
+def process_stocks():
+    # Fetch the latest 10 tickers from the portfolio
+    tickers = fetch_latest_tickers()
     for ticker in tickers:
         try:
             # Step 1: Check if a recent recommendation exists
@@ -103,16 +121,10 @@ def process_stocks(tickers):
                 print(f"Recent recommendation exists for {ticker}, skipping.")
                 continue
 
-            # Step 2: Fetch expected return from the database
-            expected_return = fetch_expected_return(ticker)
-            if expected_return is None:
-                print(f"No expected return data for {ticker}. Skipping.")
-                continue
+            # Step 2: Generate recommendations using ChatGPT
+            short_recommendation, long_recommendation = generate_recommendations(ticker)
 
-            # Step 3: Generate recommendations using ChatGPT
-            short_recommendation, long_recommendation = generate_recommendations(ticker, expected_return)
-
-            # Step 4: Store the result in 'chatgpt' table
+            # Step 3: Store the result in 'chatgpt' table
             insert_recommendation(ticker, short_recommendation, long_recommendation)
 
             print(f"Processed {ticker}")
@@ -138,10 +150,7 @@ def create_chatgpt_table():
 if __name__ == "__main__":
     try:
         create_chatgpt_table()
-        sp500_tickers = [    
-            'MMM', 'AOS', 'ABT', 'ABBV', 'ACN', 'ADBE', 'AMD', 'AES', 'AFL', 'A', 'APD', 'ABNB', 'AKAM', 'ALB', 'ARE', 'ALGN', 'ALLE'            'WM', 'WAT', 'WEC', 'WFC', 'WELL', 'WST', 'WDC', 'WY', 'WMB', 'WTW', 'WYNN', 'XEL', 'XYL', 'YUM', 'ZBRA', 'ZBH', 'ZTS'
-        ]
-        process_stocks(sp500_tickers)
+        process_stocks()
     except Exception as e:
         print(f"An error occurred: {e}")
     finally:
