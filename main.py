@@ -27,4 +27,4 @@ def run_script(script_name):
 # run_script("analysis_simulation.py")
 # run_script("portfolio.py")
 
-run_script("stock_data.py")
+run_script("chatgpt.py")
