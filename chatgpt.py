@@ -39,11 +39,13 @@ except mysql.connector.Error as err:
 # Function to fetch the latest 10 tickers from 'portfolio_simulation' table
 def fetch_latest_tickers():
     query = """
-        SELECT DISTINCT ticker
+        SELECT ticker, MAX(date) AS latest_date
         FROM portfolio_simulation
-        ORDER BY date DESC
+        GROUP BY ticker
+        ORDER BY latest_date DESC
         LIMIT 10
     """
+
     cursor.execute(query)
     result = cursor.fetchall()
     tickers = [row[0] for row in result]
