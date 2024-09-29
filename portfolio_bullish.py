@@ -137,16 +137,16 @@ def simulate_portfolio(retries=3):
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
-        # Initialize the first portfolio value (100 total, 10 per stock)
+        # Initialize the first portfolio value (100 total, 20 per stock)
         initial_date = date_list[0]
         initial_portfolio = fetch_portfolio_for_date(cursor, initial_date)
         closing_prices = get_closing_prices_as_of(cursor, initial_date)
         
         total_portfolio_value = Decimal(100)
-        equal_value_per_stock = total_portfolio_value / Decimal(10)
+        equal_value_per_stock = total_portfolio_value / Decimal(20)
         portfolio_value = []
 
-        # For the first portfolio, we allocate 10 units to each stock
+        # For the first portfolio, we allocate 20 units to each stock
         print(f"[DEBUG] Initial portfolio: {initial_portfolio}")
         for row in initial_portfolio:
             ticker, expected_return, last_closing_price = row[:3]
