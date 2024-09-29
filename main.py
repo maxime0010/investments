@@ -28,5 +28,5 @@ def run_script(script_name):
 # run_script("portfolio.py")
 # run_script("chatgpt.py")
 
-# run_script("portfolio_bullish.py")
+run_script("portfolio_bullish.py")
 # run_script("portfolio_super_bullish.py")
