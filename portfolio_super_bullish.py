@@ -143,7 +143,7 @@ def simulate_portfolio(retries=3):
         closing_prices = get_closing_prices_as_of(cursor, initial_date)
         
         total_portfolio_value = Decimal(100)
-        equal_value_per_stock = total_portfolio_value / Decimal(10)
+        equal_value_per_stock = total_portfolio_value / Decimal(1)
         portfolio_value = []
 
         # For the first portfolio, we allocate 10 units to each stock
