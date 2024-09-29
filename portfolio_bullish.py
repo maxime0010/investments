@@ -173,7 +173,7 @@ def simulate_portfolio(retries=3):
                     new_portfolio = fetch_portfolio_for_date(cursor, date)
                     
                     if new_portfolio:
-                        equal_value_per_stock = total_portfolio_value / Decimal(10)
+                        equal_value_per_stock = total_portfolio_value / Decimal(5)
                         new_portfolio_value = []
                         
                         print(f"[DEBUG] New portfolio for {date}: {new_portfolio}")
