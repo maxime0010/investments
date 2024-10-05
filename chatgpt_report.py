@@ -74,7 +74,6 @@ def is_recent_entry(ticker):
         return last_report_date >= one_week_ago
     return False
 
-# Function to generate the full 5-page report using ChatGPT
 def generate_full_report(ticker, price_target):
     prompt = f"""
     Generate a detailed 5-page stock performance analyst report for the company with the ticker {ticker}.
@@ -103,13 +102,14 @@ def generate_full_report(ticker, price_target):
     Generate the report in sections with a clear and professional tone.
     """
     
-    response = openai.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
     
-    full_report = response.choices[0]['message']['content']
+    full_report = response['choices'][0]['message']['content']
     return full_report
+
 
 # Function to parse the full report into individual sections (e.g., financial performance, business segments)
 def parse_report_sections(full_report):
