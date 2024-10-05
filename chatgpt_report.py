@@ -129,45 +129,81 @@ def parse_report(report):
         elif "price_target" in line:
             sections["executive_summary"]["price_target"] = float(line.split(":")[1].strip())
         elif "revenue_q3" in line:
-            sections["financial_performance"]["revenue_q3"] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            try:
+                sections["financial_performance"]["revenue_q3"] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            except Exception as e:
+                print(f"Error parsing revenue_q3: {e}")
         elif "net_income_q3" in line:
-            sections["financial_performance"]["net_income_q3"] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            try:
+                sections["financial_performance"]["net_income_q3"] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            except Exception as e:
+                print(f"Error parsing net_income_q3: {e}")
         elif "eps_q3" in line:
-            sections["financial_performance"]["eps_q3"] = float(line.split(":")[1].strip())
+            try:
+                sections["financial_performance"]["eps_q3"] = float(line.split(":")[1].strip())
+            except Exception as e:
+                print(f"Error parsing eps_q3: {e}")
         elif "gross_margin" in line:
-            sections["financial_performance"]["gross_margin"] = float(line.split(":")[1].replace("%", "").strip())
+            try:
+                sections["financial_performance"]["gross_margin"] = float(line.split(":")[1].replace("%", "").strip())
+            except Exception as e:
+                print(f"Error parsing gross_margin: {e}")
         elif "operating_margin" in line:
-            sections["financial_performance"]["operating_margin"] = float(line.split(":")[1].replace("%", "").strip())
+            try:
+                sections["financial_performance"]["operating_margin"] = float(line.split(":")[1].replace("%", "").strip())
+            except Exception as e:
+                print(f"Error parsing operating_margin: {e}")
         elif "cash_equivalents" in line:
-            sections["financial_performance"]["cash_equivalents"] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            try:
+                sections["financial_performance"]["cash_equivalents"] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            except Exception as e:
+                print(f"Error parsing cash_equivalents: {e}")
         elif "segment_name" in line:
-            segment_name = line.split(":")[1].strip()
-            segment_revenue = float(lines[lines.index(line)+1].split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
-            segment_growth_rate = float(lines[lines.index(line)+2].split(":")[1].replace("%", "").strip())
-            sections["business_segments"].append({
-                "segment_name": segment_name,
-                "segment_revenue": segment_revenue,
-                "segment_growth_rate": segment_growth_rate
-            })
+            try:
+                segment_name = line.split(":")[1].strip()
+                segment_revenue = float(lines[lines.index(line)+1].split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+                segment_growth_rate = float(lines[lines.index(line)+2].split(":")[1].replace("%", "").strip())
+                sections["business_segments"].append({
+                    "segment_name": segment_name,
+                    "segment_revenue": segment_revenue,
+                    "segment_growth_rate": segment_growth_rate
+                })
+            except Exception as e:
+                print(f"Error parsing business segments: {e}")
         elif "competitor_name" in line:
-            competitor_name = line.split(":")[1].strip()
-            market_share = float(lines[lines.index(line)+1].split(":")[1].strip())
-            strengths = lines[lines.index(line)+2].split(":")[1].strip()
-            weaknesses = lines[lines.index(line)+3].split(":")[1].strip()
-            sections["competitive_position"].append({
-                "competitor_name": competitor_name,
-                "market_share": market_share,
-                "strengths": strengths,
-                "weaknesses": weaknesses
-            })
+            try:
+                competitor_name = line.split(":")[1].strip()
+                market_share = float(lines[lines.index(line)+1].split(":")[1].strip())
+                strengths = lines[lines.index(line)+2].split(":")[1].strip()
+                weaknesses = lines[lines.index(line)+3].split(":")[1].strip()
+                sections["competitive_position"].append({
+                    "competitor_name": competitor_name,
+                    "market_share": market_share,
+                    "strengths": strengths,
+                    "weaknesses": weaknesses
+                })
+            except Exception as e:
+                print(f"Error parsing competitive position: {e}")
         elif "pe_ratio" in line:
-            sections["valuation_metrics"]["pe_ratio"] = float(line.split(":")[1].strip())
+            try:
+                sections["valuation_metrics"]["pe_ratio"] = float(line.split(":")[1].strip())
+            except Exception as e:
+                print(f"Error parsing pe_ratio: {e}")
         elif "ev_ebitda" in line:
-            sections["valuation_metrics"]["ev_ebitda"] = float(line.split(":")[1].strip())
+            try:
+                sections["valuation_metrics"]["ev_ebitda"] = float(line.split(":")[1].strip())
+            except Exception as e:
+                print(f"Error parsing ev_ebitda: {e}")
         elif "price_sales_ratio" in line:
-            sections["valuation_metrics"]["price_sales_ratio"] = float(line.split(":")[1].strip())
+            try:
+                sections["valuation_metrics"]["price_sales_ratio"] = float(line.split(":")[1].strip())
+            except Exception as e:
+                print(f"Error parsing price_sales_ratio: {e}")
         elif "risk" in line:
-            sections["risk_factors"].append(line.split(":")[1].strip())
+            try:
+                sections["risk_factors"].append(line.split(":")[1].strip())
+            except Exception as e:
+                print(f"Error parsing risk factors: {e}")
 
     # Debugging: Print parsed sections for verification
     print(f"Parsed Sections: {sections}")
