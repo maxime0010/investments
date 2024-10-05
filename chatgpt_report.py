@@ -78,46 +78,58 @@ def is_recent_entry(ticker):
 def generate_full_report(ticker, price_target):
     prompt = f"""
     Generate a detailed stock performance analyst report for the company with the ticker {ticker}.
-    Please provide the data in structured format (JSON), including the following clearly defined sections:
+    Please provide the entire response **strictly in JSON format** without any additional comments or explanations. 
+    The JSON structure must be as follows:
 
-    1. **Executive Summary**:
-        - recommendation: Provide a recommendation (e.g., Buy, Hold, Sell)
-        - price_target: Provide the stock's price target in dollars
-        - key_drivers: List the main drivers of growth for the company
-        - key_risks: List the major risks the company faces
-
-    2. **Company Overview**:
-        - description: Provide a brief description of the company and its main business areas
-        - products: List the main products and services offered by the company
-        - market: Describe the main markets in which the company operates
-
-    3. **Financial Performance**:
-        - revenue_q3: Provide the revenue for Q3 in dollars (e.g., $100.5 billion)
-        - net_income_q3: Provide the net income for Q3 in dollars (e.g., $10.2 billion)
-        - eps_q3: Provide the earnings per share (EPS) for Q3
-        - gross_margin: Provide the gross margin in percentage (e.g., 40%)
-        - operating_margin: Provide the operating margin in percentage (e.g., 20%)
-        - cash_equivalents: Provide the amount of cash and equivalents in dollars
-
-    4. **Business Segments**:
-        - List the key business segments. For each segment, provide:
-            - name: The name of the segment (e.g., AWS, Online Stores)
-            - revenue: The segment's revenue in dollars (e.g., $10.5 billion)
-            - growth_rate: The segment's growth rate in percentage (e.g., 15%)
-
-    5. **Competitive Position**:
-        - competitors: List the company's main competitors (e.g., Walmart, Alibaba)
-        - market_share: Provide the company's market share in percentage (e.g., 35%)
-        - strengths: List the main strengths of the company
-        - weaknesses: List the main weaknesses of the company
-
-    6. **Valuation Metrics**:
-        - pe_ratio: Provide the price-to-earnings (P/E) ratio
-        - ev_ebitda: Provide the enterprise value-to-EBITDA ratio
-        - price_sales_ratio: Provide the price-to-sales ratio
-
-    7. **Risk Factors**:
-        - List the main risk factors that the company faces (e.g., regulatory risk, market volatility)
+    {{
+        "Executive_Summary": {{
+            "recommendation": "Buy, Hold, or Sell",
+            "price_target": "{price_target}",  # Use this input value, do not generate it
+            "key_drivers": ["Main driver 1", "Main driver 2", "Main driver 3"],
+            "key_risks": ["Main risk 1", "Main risk 2", "Main risk 3"]
+        }},
+        "Company_Overview": {{
+            "description": "A brief description of the company",
+            "products": ["Product 1", "Product 2", "Product 3"],
+            "market": "The main markets where the company operates"
+        }},
+        "Financial_Performance": {{
+            "revenue_q3": "Revenue in dollars (e.g., $100.5 billion)",
+            "net_income_q3": "Net income in dollars (e.g., $10.2 billion)",
+            "eps_q3": "EPS value",
+            "gross_margin": "Gross margin in percentage (e.g., 40%)",
+            "operating_margin": "Operating margin in percentage (e.g., 20%)",
+            "cash_equivalents": "Cash and equivalents in dollars (e.g., $50.5 billion)"
+        }},
+        "Business_Segments": [
+            {{
+                "name": "Segment 1",
+                "revenue": "Revenue in dollars (e.g., $10.5 billion)",
+                "growth_rate": "Growth rate in percentage (e.g., 15%)"
+            }},
+            {{
+                "name": "Segment 2",
+                "revenue": "Revenue in dollars (e.g., $8.5 billion)",
+                "growth_rate": "Growth rate in percentage (e.g., 10%)"
+            }}
+        ],
+        "Competitive_Position": {{
+            "competitors": ["Competitor 1", "Competitor 2"],
+            "market_share": "Market share in percentage (e.g., 40%)",
+            "strengths": ["Strength 1", "Strength 2"],
+            "weaknesses": ["Weakness 1", "Weakness 2"]
+        }},
+        "Valuation_Metrics": {{
+            "pe_ratio": "P/E ratio value",
+            "ev_ebitda": "EV/EBITDA ratio value",
+            "price_sales_ratio": "Price-to-sales ratio value"
+        }},
+        "Risk_Factors": [
+            "Risk factor 1",
+            "Risk factor 2",
+            "Risk factor 3"
+        ]
+    }}
     """
     
     response = client.chat.completions.create(
@@ -128,14 +140,16 @@ def generate_full_report(ticker, price_target):
     return response.choices[0].message.content
 
 
+
 def parse_report(report):
     try:
-        parsed_data = json.loads(report)
+        parsed_data = json.loads(report)  # Directly load the JSON
         print(f"Parsed Report Data: {parsed_data}")
         return parsed_data
     except json.JSONDecodeError as e:
         print(f"Error: Failed to parse the report as JSON. {e}")
         return None
+
 
 
 def insert_report_data(ticker, sections):
@@ -257,6 +271,40 @@ def insert_report_data(ticker, sections):
 
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
+
+# Main script to process stock data for predefined tickers
+def process_stocks(tickers):
+    for ticker in tickers:
+        try:
+            if is_recent_entry(ticker):
+                print(f"Recent recommendation exists for {ticker}, skipping.")
+                continue
+
+            price_target = fetch_price_target(ticker)
+            if not price_target:
+                print(f"No price target found for {ticker}, skipping.")
+                continue
+
+            full_report = generate_full_report(ticker, price_target)
+            sections = parse_report(full_report)
+
+            if sections:
+                insert_report_data(ticker, sections)
+                print(f"Processed {ticker}")
+            else:
+                print(f"Failed to parse report for {ticker}, skipping.")
+        except Exception as e:
+            print(f"Error processing {ticker}: {e}")
+
+if __name__ == "__main__":
+    try:
+        process_stocks(tickers)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
 
 # Main script to process stock data for predefined tickers
 def process_stocks(tickers):
