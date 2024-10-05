@@ -70,9 +70,10 @@ def is_recent_entry(ticker):
 
     # If a result is found, compare the dates
     if result:
-        last_report_date = result[0]  # No need to convert to date, it's already a date object
+        last_report_date = result[0]  # Access by index (0th element of the tuple)
         return last_report_date >= one_week_ago
     return False
+
 
 
 
