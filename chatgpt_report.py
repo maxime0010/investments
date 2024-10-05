@@ -1,4 +1,4 @@
-import openai
+from openai import OpenAI
 import os
 import sys
 import mysql.connector
@@ -28,8 +28,8 @@ db_config = {
     'port': 25060
 }
 
-# Set the OpenAI API key
-openai.api_key = chatgpt_key
+# Initialize OpenAI client
+client = OpenAI(api_key=chatgpt_key)
 
 # Establish MySQL connection
 try:
@@ -74,6 +74,7 @@ def is_recent_entry(ticker):
         return last_report_date >= one_week_ago
     return False
 
+# Function to generate the full 5-page report using ChatGPT
 def generate_full_report(ticker, price_target):
     prompt = f"""
     Generate a detailed 5-page stock performance analyst report for the company with the ticker {ticker}.
@@ -102,14 +103,14 @@ def generate_full_report(ticker, price_target):
     Generate the report in sections with a clear and professional tone.
     """
     
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
     
-    full_report = response['choices'][0]['message']['content']
+    # The response object is now a Pydantic model, so we use `model_dump()` to access its data
+    full_report = response.choices[0].message.content
     return full_report
-
 
 # Function to parse the full report into individual sections (e.g., financial performance, business segments)
 def parse_report_sections(full_report):
@@ -151,12 +152,12 @@ def fetch_stock_info_from_chatgpt(ticker):
     prompt = f"Provide the full company name, sector, and stock exchange for the ticker symbol {ticker}."
 
     try:
-        response = openai.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}]
         )
 
-        stock_info = response.choices[0]['message']['content']
+        stock_info = response.choices[0].message.content
         return stock_info
     except Exception as e:
         print(f"Error fetching stock information from ChatGPT for {ticker}: {e}")
