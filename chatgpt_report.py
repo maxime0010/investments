@@ -56,7 +56,7 @@ def is_recent_entry(ticker):
     one_week_ago = datetime.now() - timedelta(weeks=1)
     query = """
         SELECT date
-        FROM chatgpt
+        FROM chatgpt_report
         WHERE ticker = %s
         ORDER BY date DESC LIMIT 1
     """
