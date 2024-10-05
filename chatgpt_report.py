@@ -300,9 +300,9 @@ def insert_report_data(ticker, sections):
         cursor.execute(query_segments, (
             report_id, 
             stock_id, 
-            segment.get('name'), 
-            segment.get('revenue'), 
-            segment.get('growth_rate')
+            segment.get('segment_name'), 
+            segment.get('segment_revenue'), 
+            segment.get('segment_growth_rate')
         ))
 
     # Step 6: Insert into CompetitivePosition table
