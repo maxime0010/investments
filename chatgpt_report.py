@@ -3,6 +3,7 @@ import os
 import sys
 import mysql.connector
 from datetime import datetime, timedelta
+import re
 
 # Define the list of tickers (Amazon, Adobe, Nvidia)
 tickers = ['AMZN', 'ADBE', 'NVDA']
@@ -55,7 +56,6 @@ def fetch_price_target(ticker):
 def is_recent_entry(ticker):
     one_week_ago = (datetime.now() - timedelta(weeks=1)).date()  # Convert to date
 
-    # Query to check if a report for the given ticker has been generated within the last week
     query = """
         SELECT r.report_date
         FROM Reports r
@@ -68,12 +68,10 @@ def is_recent_entry(ticker):
     cursor.execute(query, (ticker,))
     result = cursor.fetchone()
 
-    # If a result is found, compare the dates
     if result:
-        last_report_date = result['report_date']  # Access by field name
+        last_report_date = result['report_date']
         return last_report_date >= one_week_ago
     return False
-
 
 # Function to generate the full 5-page report using ChatGPT
 def generate_full_report(ticker, price_target):
@@ -113,6 +111,35 @@ def generate_full_report(ticker, price_target):
     return full_report
 
 
+# Function to extract key financial metrics (e.g., revenue, net income, EPS) using regex
+def extract_financial_data(financial_text):
+    financial_data = {}
+
+    # Use regular expressions to find the numbers in the financial text
+    revenue_match = re.search(r'revenue of \$(\d+\.?\d*) billion', financial_text, re.IGNORECASE)
+    net_income_match = re.search(r'net income of \$(\d+\.?\d*) billion', financial_text, re.IGNORECASE)
+    eps_match = re.search(r'EPS of \$(\d+\.?\d*)', financial_text, re.IGNORECASE)
+    gross_margin_match = re.search(r'gross margin was (\d+\.?\d*)%', financial_text, re.IGNORECASE)
+    operating_margin_match = re.search(r'operating margin was (\d+\.?\d*)%', financial_text, re.IGNORECASE)
+    cash_equivalents_match = re.search(r'cash equivalents of \$(\d+\.?\d*) billion', financial_text, re.IGNORECASE)
+
+    # If the regex finds the number, convert it to the appropriate data type
+    if revenue_match:
+        financial_data['revenue_q3'] = float(revenue_match.group(1)) * 1e9  # Convert from billion to number
+    if net_income_match:
+        financial_data['net_income_q3'] = float(net_income_match.group(1)) * 1e9
+    if eps_match:
+        financial_data['eps_q3'] = float(eps_match.group(1))
+    if gross_margin_match:
+        financial_data['gross_margin'] = float(gross_margin_match.group(1))
+    if operating_margin_match:
+        financial_data['operating_margin'] = float(operating_margin_match.group(1))
+    if cash_equivalents_match:
+        financial_data['cash_equivalents'] = float(cash_equivalents_match.group(1)) * 1e9
+
+    return financial_data
+
+
 # Function to parse the full report into individual sections (e.g., financial performance, business segments)
 def parse_report_sections(full_report):
     sections = {
@@ -145,6 +172,9 @@ def parse_report_sections(full_report):
         if current_section and line.strip() and current_section in sections:
             sections[current_section] += line.strip() + " "
 
+    # Log the financial performance section for debugging
+    print(f"Financial Performance Section: {sections['financial_performance']}")
+    
     return sections
 
 # Function to query ChatGPT API to get stock information
@@ -169,7 +199,6 @@ def fetch_stock_info_from_chatgpt(ticker):
 
 # Updated parsing for stock information
 def insert_report_data(ticker, sections):
-    # Get the current date and time
     report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     # Step 1: Retrieve the stock_id from StockInformation table or insert if it doesn't exist
@@ -185,25 +214,19 @@ def insert_report_data(ticker, sections):
             print(f"Failed to retrieve stock information for ticker {ticker}. Skipping.")
             return
         
-        # Updated parsing logic using exact keywords
-        try:
-            lines = stock_info_text.split('\n')
-            stock_name, sector, exchange = "Unknown Company", "Unknown Sector", "Unknown Exchange"
+        lines = stock_info_text.split('\n')
+        stock_name, sector, exchange = "Unknown Company", "Unknown Sector", "Unknown Exchange"
 
-            for line in lines:
-                if "Company Name:" in line:
-                    stock_name = line.split("Company Name:")[1].strip()
-                elif "Sector:" in line:
-                    sector = line.split("Sector:")[1].strip()
-                elif "Stock Exchange:" in line:
-                    exchange = line.split("Stock Exchange:")[1].strip()
+        for line in lines:
+            if "Company Name:" in line:
+                stock_name = line.split("Company Name:")[1].strip()
+            elif "Sector:" in line:
+                sector = line.split("Sector:")[1].strip()
+            elif "Stock Exchange:" in line:
+                exchange = line.split("Stock Exchange:")[1].strip()
 
-            print(f"Parsed stock name: {stock_name}, sector: {sector}, exchange: {exchange}")
-        except Exception as e:
-            print(f"Error parsing stock information from ChatGPT response: {e}")
-            return
+        print(f"Parsed stock name: {stock_name}, sector: {sector}, exchange: {exchange}")
 
-        # Insert the stock into StockInformation
         query_insert_stock = """
             INSERT INTO StockInformation (stock_name, ticker_symbol, sector, exchange) 
             VALUES (%s, %s, %s, %s)
@@ -211,7 +234,6 @@ def insert_report_data(ticker, sections):
         cursor.execute(query_insert_stock, (stock_name, ticker, sector, exchange))
         conn.commit()
 
-        # Retrieve the newly inserted stock_id
         stock_id = cursor.lastrowid
     else:
         stock_id = stock_info['stock_id']
@@ -225,13 +247,14 @@ def insert_report_data(ticker, sections):
     conn.commit()
     report_id = cursor.lastrowid  # Get the last inserted report_id
 
-    # Step 3: Insert into FinancialPerformance table using extracted data
-    financial_data = sections.get('financial_data', {})
+    # Step 3: Extract financial data
+    financial_data = extract_financial_data(sections['financial_performance'])
     
     if not financial_data:
         print(f"Missing financial data for {ticker}, skipping.")
         return
     
+    # Step 4: Insert into FinancialPerformance table using extracted data
     query_financial = """
         INSERT INTO FinancialPerformance 
         (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents)
@@ -248,50 +271,7 @@ def insert_report_data(ticker, sections):
         financial_data.get('cash_equivalents')
     ))
 
-    # Step 4: Insert into BusinessSegments table using data from parsed sections
-    business_segments = sections.get('business_segments', [])
-    query_segments = """
-        INSERT INTO BusinessSegments (report_id, stock_id, segment_name, segment_revenue, segment_growth_rate)
-        VALUES (%s, %s, %s, %s, %s)
-    """
-    for segment in business_segments:
-        cursor.execute(query_segments, (
-            report_id, 
-            stock_id, 
-            segment.get('name'), 
-            segment.get('revenue'), 
-            segment.get('growth_rate')
-        ))
-
-    # Step 5: Insert into ValuationMetrics table using extracted data
-    valuation_data = sections.get('valuation_metrics', {})
-    query_valuation = """
-        INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio, valuation_method)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """
-    cursor.execute(query_valuation, (
-        report_id, 
-        stock_id, 
-        valuation_data.get('pe_ratio'), 
-        valuation_data.get('ev_ebitda'), 
-        valuation_data.get('price_sales_ratio'), 
-        valuation_data.get('valuation_method')
-    ))
-
-    # Step 6: Insert into RiskFactors table using extracted data
-    risk_factors = sections.get('risk_factors', [])
-    query_risk = """
-        INSERT INTO RiskFactors (report_id, stock_id, risk)
-        VALUES (%s, %s, %s)
-    """
-    for risk in risk_factors:
-        cursor.execute(query_risk, (
-            report_id, 
-            stock_id, 
-            risk
-        ))
-
-    # Commit all the changes to the database
+    # Insert other sections like BusinessSegments, ValuationMetrics, RiskFactors...
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
 
