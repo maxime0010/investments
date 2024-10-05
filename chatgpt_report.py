@@ -157,11 +157,15 @@ def fetch_stock_info_from_chatgpt(ticker):
             messages=[{"role": "user", "content": prompt}]
         )
 
+        # Print response for debugging
         stock_info = response.choices[0].message.content
+        print(f"Response from ChatGPT for {ticker}: {stock_info}")
+
         return stock_info
     except Exception as e:
         print(f"Error fetching stock information from ChatGPT for {ticker}: {e}")
         return None
+
 
 # Function to insert parsed sections into the appropriate tables in the database
 def insert_report_data(ticker, sections):
@@ -181,13 +185,25 @@ def insert_report_data(ticker, sections):
             print(f"Failed to retrieve stock information for ticker {ticker}. Skipping.")
             return
         
-        # Parsing the stock information from the ChatGPT response (custom parsing based on response format)
-        # Example response: "The company name is Amazon.com Inc., the sector is Technology, and the exchange is NASDAQ."
+        # Log stock_info_text for debugging
+        print(f"Stock information from ChatGPT for {ticker}: {stock_info_text}")
+
+        # Updated parsing logic
         try:
-            stock_name = stock_info_text.split("company name is")[1].split(",")[0].strip()
-            sector = stock_info_text.split("sector is")[1].split(",")[0].strip()
-            exchange = stock_info_text.split("exchange is")[1].split(".")[0].strip()
-        except IndexError as e:
+            # More robust parsing by checking expected phrases
+            stock_name = "Unknown Company"
+            sector = "Unknown Sector"
+            exchange = "Unknown Exchange"
+
+            if "company name is" in stock_info_text:
+                stock_name = stock_info_text.split("company name is")[1].split(",")[0].strip()
+            if "sector is" in stock_info_text:
+                sector = stock_info_text.split("sector is")[1].split(",")[0].strip()
+            if "exchange is" in stock_info_text:
+                exchange = stock_info_text.split("exchange is")[1].split(".")[0].strip()
+
+            print(f"Parsed stock name: {stock_name}, sector: {sector}, exchange: {exchange}")
+        except Exception as e:
             print(f"Error parsing stock information from ChatGPT response: {e}")
             return
 
@@ -277,6 +293,7 @@ def insert_report_data(ticker, sections):
     # Commit all the changes to the database
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
+
 
 # Main script to process stock data for predefined tickers
 def process_stocks(tickers):
