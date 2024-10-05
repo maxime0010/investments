@@ -31,10 +31,10 @@ db_config = {
 # Initialize OpenAI client
 client = OpenAI(api_key=chatgpt_key)
 
-# Establish MySQL connection
+# Establish MySQL connection with a dictionary cursor
 try:
     conn = mysql.connector.connect(**db_config)
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)  # Using dictionary cursor to access by field names
 except mysql.connector.Error as err:
     print(f"Error: {err}")
     sys.exit()
@@ -49,7 +49,7 @@ def fetch_price_target(ticker):
     """
     cursor.execute(query, (ticker,))
     result = cursor.fetchone()
-    return result[0] if result else None
+    return result['avg_combined_criteria'] if result else None
 
 # Function to check if a report has been generated in the last week for the given ticker
 def is_recent_entry(ticker):
@@ -70,11 +70,9 @@ def is_recent_entry(ticker):
 
     # If a result is found, compare the dates
     if result:
-        last_report_date = result[0]  # Access by index (0th element of the tuple)
+        last_report_date = result['report_date']  # Access by field name
         return last_report_date >= one_week_ago
     return False
-
-
 
 
 # Function to generate the full 5-page report using ChatGPT
@@ -111,9 +109,9 @@ def generate_full_report(ticker, price_target):
         messages=[{"role": "user", "content": prompt}]
     )
     
-    # The response object is now a Pydantic model, so we use `model_dump()` to access its data
     full_report = response.choices[0].message.content
     return full_report
+
 
 # Function to parse the full report into individual sections (e.g., financial performance, business segments)
 def parse_report_sections(full_report):
@@ -160,7 +158,6 @@ def fetch_stock_info_from_chatgpt(ticker):
             messages=[{"role": "user", "content": prompt}]
         )
 
-        # Print response for debugging
         stock_info = response.choices[0].message.content
         print(f"Response from ChatGPT for {ticker}: {stock_info}")
 
@@ -188,16 +185,10 @@ def insert_report_data(ticker, sections):
             print(f"Failed to retrieve stock information for ticker {ticker}. Skipping.")
             return
         
-        # Log stock_info_text for debugging
-        print(f"Stock information from ChatGPT for {ticker}: {stock_info_text}")
-
-        # Updated parsing logic using explicit string matching
+        # Updated parsing logic using exact keywords
         try:
-            # Extract stock name, sector, and exchange using exact keywords
             lines = stock_info_text.split('\n')
-            stock_name = "Unknown Company"
-            sector = "Unknown Sector"
-            exchange = "Unknown Exchange"
+            stock_name, sector, exchange = "Unknown Company", "Unknown Sector", "Unknown Exchange"
 
             for line in lines:
                 if "Company Name:" in line:
