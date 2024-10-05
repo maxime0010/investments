@@ -167,7 +167,7 @@ def fetch_stock_info_from_chatgpt(ticker):
         return None
 
 
-# Function to insert parsed sections into the appropriate tables in the database
+# Updated parsing for stock information
 def insert_report_data(ticker, sections):
     # Get the current date and time
     report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -188,19 +188,21 @@ def insert_report_data(ticker, sections):
         # Log stock_info_text for debugging
         print(f"Stock information from ChatGPT for {ticker}: {stock_info_text}")
 
-        # Updated parsing logic
+        # Updated parsing logic using explicit string matching
         try:
-            # More robust parsing by checking expected phrases
+            # Extract stock name, sector, and exchange using exact keywords
+            lines = stock_info_text.split('\n')
             stock_name = "Unknown Company"
             sector = "Unknown Sector"
             exchange = "Unknown Exchange"
 
-            if "company name is" in stock_info_text:
-                stock_name = stock_info_text.split("company name is")[1].split(",")[0].strip()
-            if "sector is" in stock_info_text:
-                sector = stock_info_text.split("sector is")[1].split(",")[0].strip()
-            if "exchange is" in stock_info_text:
-                exchange = stock_info_text.split("exchange is")[1].split(".")[0].strip()
+            for line in lines:
+                if "Company Name:" in line:
+                    stock_name = line.split("Company Name:")[1].strip()
+                elif "Sector:" in line:
+                    sector = line.split("Sector:")[1].strip()
+                elif "Stock Exchange:" in line:
+                    exchange = line.split("Stock Exchange:")[1].strip()
 
             print(f"Parsed stock name: {stock_name}, sector: {sector}, exchange: {exchange}")
         except Exception as e:
@@ -231,6 +233,11 @@ def insert_report_data(ticker, sections):
 
     # Step 3: Insert into FinancialPerformance table using extracted data
     financial_data = sections.get('financial_data', {})
+    
+    if not financial_data:
+        print(f"Missing financial data for {ticker}, skipping.")
+        return
+    
     query_financial = """
         INSERT INTO FinancialPerformance 
         (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents)
@@ -293,6 +300,7 @@ def insert_report_data(ticker, sections):
     # Commit all the changes to the database
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
+
 
 
 # Main script to process stock data for predefined tickers
