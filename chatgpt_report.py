@@ -53,14 +53,19 @@ def fetch_price_target(ticker):
     result = cursor.fetchone()
     return result['avg_combined_criteria'] if result else None
 
-# Function to clean financial values (remove $, commas, and convert to float)
+# Function to clean financial values (remove $, commas, %, and convert to float)
 def clean_financial_value(value):
     if isinstance(value, str):
         # Remove $ and commas
-        value = value.replace('$', '').replace(',', '')
-        # Handle values expressed in billions (e.g., $3.23 billion)
+        value = value.replace('$', '').replace(',', '').replace(' ', '')
+        # Handle percentages
+        if '%' in value:
+            value = value.replace('%', '')
+        # Handle values expressed in billions or millions
         if 'billion' in value.lower():
             value = float(value.replace('billion', '').strip()) * 1e9
+        elif 'million' in value.lower():
+            value = float(value.replace('million', '').strip()) * 1e6
         return float(value)
     return value
 
