@@ -3,7 +3,6 @@ import os
 import sys
 import mysql.connector
 from datetime import datetime, timedelta
-import re
 
 # Define the list of tickers (Amazon, Adobe, Nvidia)
 tickers = ['AMZN', 'ADBE', 'NVDA']
@@ -77,29 +76,60 @@ def is_recent_entry(ticker):
 def generate_full_report(ticker, price_target):
     prompt = f"""
     Generate a detailed 5-page stock performance analyst report for the company with the ticker {ticker}.
+    Please provide the data in a structured format for easy extraction into a database.
+
     Here is what to include:
 
     1. **Executive Summary**:
-       - Provide a recommendation for the stock (e.g., Buy, Hold, Sell)
-       - Mention the price target: {price_target}
-       - Provide a brief overview of key drivers and risks.
+       recommendation: (e.g., Buy, Hold, Sell)
+       price_target: {price_target}
+       key_drivers: [List of key drivers]
+       key_risks: [List of key risks]
 
     2. **Company Overview**:
-       - Describe the company's business, key products, and market positioning.
+       business_overview: (Brief description of the company’s business, products, and market positioning)
 
-    3. **Financial Performance**:
-       - Provide the latest financial data, including revenue, net income, EPS, and profit margins.
+    3. **Financial Performance** (structured data):
+       revenue_q3: $X.X billion
+       net_income_q3: $X.X billion
+       eps_q3: $X.XX
+       gross_margin: X.X%
+       operating_margin: X.X%
+       cash_equivalents: $X.X billion
 
     4. **Business Segments**:
-       - List the key business segments and their respective revenues and growth rates.
+       segments: [
+           {
+               "segment_name": "Segment 1",
+               "segment_revenue": $X.X billion,
+               "segment_growth_rate": X.X%
+           },
+           {
+               "segment_name": "Segment 2",
+               "segment_revenue": $X.X billion,
+               "segment_growth_rate": X.X%
+           }
+       ]
 
-    5. **Valuation Metrics**:
-       - Provide the P/E ratio, EV/EBITDA, and other relevant valuation ratios.
+    5. **Competitive Position**:
+       competitors: [
+           {
+               "competitor_name": "Competitor 1",
+               "market_share": X.X,
+               "strengths": "Strengths of competitor",
+               "weaknesses": "Weaknesses of competitor"
+           }
+       ]
 
-    6. **Risk Factors**:
-       - List the major risks facing the company and the stock.
+    6. **Valuation Metrics**:
+       pe_ratio: X.X
+       ev_ebitda: X.X
+       price_sales_ratio: X.X
 
-    Generate the report in sections with a clear and professional tone.
+    7. **Risk Factors**:
+       risks: [List of major risks]
+
+    Generate the report in sections with a clear and structured format.
     """
     
     response = client.chat.completions.create(
@@ -110,94 +140,78 @@ def generate_full_report(ticker, price_target):
     full_report = response.choices[0].message.content
     return full_report
 
-
-# Function to extract key financial metrics (e.g., revenue, net income, EPS) using regex
-def extract_financial_data(financial_text):
-    financial_data = {}
-
-    # Use regular expressions to find the numbers in the financial text
-    revenue_match = re.search(r'revenue of \$(\d+\.?\d*) billion', financial_text, re.IGNORECASE)
-    net_income_match = re.search(r'net income of \$(\d+\.?\d*) billion', financial_text, re.IGNORECASE)
-    eps_match = re.search(r'EPS of \$(\d+\.?\d*)', financial_text, re.IGNORECASE)
-    gross_margin_match = re.search(r'gross margin was (\d+\.?\d*)%', financial_text, re.IGNORECASE)
-    operating_margin_match = re.search(r'operating margin was (\d+\.?\d*)%', financial_text, re.IGNORECASE)
-    cash_equivalents_match = re.search(r'cash equivalents of \$(\d+\.?\d*) billion', financial_text, re.IGNORECASE)
-
-    # If the regex finds the number, convert it to the appropriate data type
-    if revenue_match:
-        financial_data['revenue_q3'] = float(revenue_match.group(1)) * 1e9  # Convert from billion to number
-    if net_income_match:
-        financial_data['net_income_q3'] = float(net_income_match.group(1)) * 1e9
-    if eps_match:
-        financial_data['eps_q3'] = float(eps_match.group(1))
-    if gross_margin_match:
-        financial_data['gross_margin'] = float(gross_margin_match.group(1))
-    if operating_margin_match:
-        financial_data['operating_margin'] = float(operating_margin_match.group(1))
-    if cash_equivalents_match:
-        financial_data['cash_equivalents'] = float(cash_equivalents_match.group(1)) * 1e9
-
-    return financial_data
-
-
-# Function to parse the full report into individual sections (e.g., financial performance, business segments)
+# Function to parse the structured financial data and other sections
 def parse_report_sections(full_report):
-    sections = {
-        'executive_summary': "",
-        'company_overview': "",
-        'financial_performance': "",
-        'business_segments': "",
-        'valuation_metrics': "",
-        'risk_factors': ""
-    }
-    
-    # Split the report by section headers and assign text to appropriate sections
-    lines = full_report.split('\n')
-    current_section = None
-    
-    for line in lines:
-        if "Executive Summary" in line:
-            current_section = 'executive_summary'
-        elif "Company Overview" in line:
-            current_section = 'company_overview'
-        elif "Financial Performance" in line:
-            current_section = 'financial_performance'
-        elif "Business Segments" in line:
-            current_section = 'business_segments'
-        elif "Valuation Metrics" in line:
-            current_section = 'valuation_metrics'
-        elif "Risk Factors" in line:
-            current_section = 'risk_factors'
-        
-        if current_section and line.strip() and current_section in sections:
-            sections[current_section] += line.strip() + " "
+    sections = {}
 
-    # Log the financial performance section for debugging
-    print(f"Financial Performance Section: {sections['financial_performance']}")
-    
+    # Extracting the structured parts of the report directly from the formatted data
+    # For simplicity, assuming the structure returned matches the request
+    lines = full_report.split('\n')
+
+    # Parse each section into the dictionary
+    for line in lines:
+        line = line.strip()
+
+        if line.startswith("recommendation"):
+            sections['executive_summary'] = {
+                'recommendation': line.split(":")[1].strip(),
+                'key_drivers': [],
+                'key_risks': []
+            }
+        elif line.startswith("business_overview"):
+            sections['company_overview'] = line.split(":")[1].strip()
+        elif line.startswith("revenue_q3"):
+            sections['financial_performance'] = {
+                'revenue_q3': float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            }
+        elif line.startswith("net_income_q3"):
+            sections['financial_performance']['net_income_q3'] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+        elif line.startswith("eps_q3"):
+            sections['financial_performance']['eps_q3'] = float(line.split(":")[1].strip())
+        elif line.startswith("gross_margin"):
+            sections['financial_performance']['gross_margin'] = float(line.split(":")[1].replace("%", "").strip())
+        elif line.startswith("operating_margin"):
+            sections['financial_performance']['operating_margin'] = float(line.split(":")[1].replace("%", "").strip())
+        elif line.startswith("cash_equivalents"):
+            sections['financial_performance']['cash_equivalents'] = float(line.split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+        elif line.startswith("segments"):
+            sections['business_segments'] = []
+        elif "segment_name" in line:
+            segment_name = line.split(":")[1].strip()
+            segment_revenue = float(lines[lines.index(line)+1].split(":")[1].replace("$", "").replace("billion", "").strip()) * 1e9
+            segment_growth_rate = float(lines[lines.index(line)+2].split(":")[1].replace("%", "").strip())
+            sections['business_segments'].append({
+                'segment_name': segment_name,
+                'segment_revenue': segment_revenue,
+                'segment_growth_rate': segment_growth_rate
+            })
+        elif line.startswith("pe_ratio"):
+            sections['valuation_metrics'] = {
+                'pe_ratio': float(line.split(":")[1].strip())
+            }
+        elif line.startswith("ev_ebitda"):
+            sections['valuation_metrics']['ev_ebitda'] = float(line.split(":")[1].strip())
+        elif line.startswith("price_sales_ratio"):
+            sections['valuation_metrics']['price_sales_ratio'] = float(line.split(":")[1].strip())
+        elif line.startswith("competitors"):
+            sections['competitive_position'] = []
+        elif "competitor_name" in line:
+            competitor_name = line.split(":")[1].strip()
+            market_share = float(lines[lines.index(line)+1].split(":")[1].strip())
+            strengths = lines[lines.index(line)+2].split(":")[1].strip()
+            weaknesses = lines[lines.index(line)+3].split(":")[1].strip()
+            sections['competitive_position'].append({
+                'competitor_name': competitor_name,
+                'market_share': market_share,
+                'strengths': strengths,
+                'weaknesses': weaknesses
+            })
+        elif line.startswith("risks"):
+            sections['risk_factors'] = []
+
     return sections
 
-# Function to query ChatGPT API to get stock information
-def fetch_stock_info_from_chatgpt(ticker):
-    # Create a prompt to request stock information (e.g., name, sector, and exchange)
-    prompt = f"Provide the full company name, sector, and stock exchange for the ticker symbol {ticker}."
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        stock_info = response.choices[0].message.content
-        print(f"Response from ChatGPT for {ticker}: {stock_info}")
-
-        return stock_info
-    except Exception as e:
-        print(f"Error fetching stock information from ChatGPT for {ticker}: {e}")
-        return None
-
-
-# Updated parsing for stock information
+# Insert parsed sections into the database
 def insert_report_data(ticker, sections):
     report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -208,7 +222,6 @@ def insert_report_data(ticker, sections):
     if not stock_info:
         print(f"Stock information not found for ticker {ticker}. Fetching it from ChatGPT API.")
 
-        # Use ChatGPT to retrieve stock information
         stock_info_text = fetch_stock_info_from_chatgpt(ticker)
         if not stock_info_text:
             print(f"Failed to retrieve stock information for ticker {ticker}. Skipping.")
@@ -248,7 +261,7 @@ def insert_report_data(ticker, sections):
     report_id = cursor.lastrowid  # Get the last inserted report_id
 
     # Step 3: Extract financial data
-    financial_data = extract_financial_data(sections['financial_performance'])
+    financial_data = sections.get('financial_performance', {})
     
     if not financial_data:
         print(f"Missing financial data for {ticker}, skipping.")
@@ -271,10 +284,68 @@ def insert_report_data(ticker, sections):
         financial_data.get('cash_equivalents')
     ))
 
-    # Insert other sections like BusinessSegments, ValuationMetrics, RiskFactors...
+    # Step 5: Insert into BusinessSegments table using extracted data
+    business_segments = sections.get('business_segments', [])
+    query_segments = """
+        INSERT INTO BusinessSegments (report_id, stock_id, segment_name, segment_revenue, segment_growth_rate)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    for segment in business_segments:
+        cursor.execute(query_segments, (
+            report_id, 
+            stock_id, 
+            segment.get('name'), 
+            segment.get('revenue'), 
+            segment.get('growth_rate')
+        ))
+
+    # Step 6: Insert into CompetitivePosition table
+    competitive_position = sections.get('competitive_position', [])
+    query_competition = """
+        INSERT INTO CompetitivePosition (report_id, stock_id, competitor_name, market_share, strengths, weaknesses)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    for competitor in competitive_position:
+        cursor.execute(query_competition, (
+            report_id,
+            stock_id,
+            competitor.get('competitor_name'),
+            competitor.get('market_share'),
+            competitor.get('strengths'),
+            competitor.get('weaknesses')
+        ))
+
+    # Step 7: Insert into ValuationMetrics table
+    valuation_data = sections.get('valuation_metrics', {})
+    query_valuation = """
+        INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio, valuation_method)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(query_valuation, (
+        report_id, 
+        stock_id, 
+        valuation_data.get('pe_ratio'), 
+        valuation_data.get('ev_ebitda'), 
+        valuation_data.get('price_sales_ratio'), 
+        "P/E multiples based on future earnings"
+    ))
+
+    # Step 8: Insert into RiskFactors table
+    risk_factors = sections.get('risk_factors', [])
+    query_risks = """
+        INSERT INTO RiskFactors (report_id, stock_id, risk)
+        VALUES (%s, %s, %s)
+    """
+    for risk in risk_factors:
+        cursor.execute(query_risks, (
+            report_id, 
+            stock_id, 
+            risk
+        ))
+
+    # Commit all the changes to the database
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
-
 
 
 # Main script to process stock data for predefined tickers
