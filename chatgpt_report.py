@@ -103,7 +103,7 @@ def generate_full_report(ticker, price_target):
     Generate the report in sections with a clear and professional tone.
     """
     
-    response = openai.ChatCompletion.create(
+    response = openai.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
@@ -151,12 +151,12 @@ def fetch_stock_info_from_chatgpt(ticker):
     prompt = f"Provide the full company name, sector, and stock exchange for the ticker symbol {ticker}."
 
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}]
         )
 
-        stock_info = response['choices'][0]['message']['content']
+        stock_info = response.choices[0]['message']['content']
         return stock_info
     except Exception as e:
         print(f"Error fetching stock information from ChatGPT for {ticker}: {e}")
