@@ -43,7 +43,6 @@ except mysql.connector.Error as err:
 
 # Function to fetch price target from 'analysis_simulation' table
 def fetch_price_target(ticker):
-    print(f"Fetching price target for {ticker}")
     query = """
         SELECT avg_combined_criteria
         FROM analysis_simulation
@@ -75,7 +74,7 @@ def is_recent_entry(ticker):
         return last_report_date >= one_week_ago
     return False
 
-# Function to fetch stock information from ChatGPT
+# Function to fetch stock information from ChatGPT (if missing)
 def fetch_stock_info_from_chatgpt(ticker):
     prompt = f"""
     Provide the full company name, sector, and stock exchange for the ticker {ticker}.
@@ -98,50 +97,59 @@ def fetch_stock_info_from_chatgpt(ticker):
 # Generate structured report using ChatGPT with explicit JSON-only instruction
 def generate_full_report(ticker, price_target):
     prompt = f"""
-    Generate a detailed 5-page stock performance analyst report for the company with the ticker {ticker}.
-    Please provide the entire response **strictly in JSON format**. 
-    Do not include any additional text or comments outside of the JSON.
+    Generate a detailed stock performance analyst report for the company with the ticker {ticker}.
+    Please provide the entire response strictly in JSON format.
+    The JSON structure should include the following sections:
 
-    The JSON should include the following clearly defined sections:
-
-    1. **Executive Summary**:
-        - recommendation: Provide a recommendation (e.g., Buy, Hold, Sell)
-        - price_target: {price_target}  # Use this input value, do not generate it
-        - key_drivers: List the main drivers of growth for the company
-        - key_risks: List the major risks the company faces
-
-    2. **Company Overview**:
-        - description: Provide a brief description of the company and its main business areas
-        - products: List the main products and services offered by the company
-        - market: Describe the main markets in which the company operates
-
-    3. **Financial Performance**:
-        - revenue_q3: Provide the revenue for Q3 in dollars (e.g., $100.5 billion)
-        - net_income_q3: Provide the net income for Q3 in dollars (e.g., $10.2 billion)
-        - eps_q3: Provide the earnings per share (EPS) for Q3
-        - gross_margin: Provide the gross margin in percentage (e.g., 40%)
-        - operating_margin: Provide the operating margin in percentage (e.g., 20%)
-        - cash_equivalents: Provide the amount of cash and equivalents in dollars
-
-    4. **Business Segments**:
-        - List the key business segments. For each segment, provide:
-            - name: The name of the segment (e.g., AWS, Online Stores)
-            - revenue: The segment's revenue in dollars (e.g., $10.5 billion)
-            - growth_rate: The segment's growth rate in percentage (e.g., 15%)
-
-    5. **Competitive Position**:
-        - competitors: List the company's main competitors (e.g., Walmart, Alibaba)
-        - market_share: Provide the company's market share in percentage (e.g., 35%)
-        - strengths: List the main strengths of the company
-        - weaknesses: List the main weaknesses of the company
-
-    6. **Valuation Metrics**:
-        - pe_ratio: Provide the price-to-earnings (P/E) ratio
-        - ev_ebitda: Provide the enterprise value-to-EBITDA ratio
-        - price_sales_ratio: Provide the price-to-sales ratio
-
-    7. **Risk Factors**:
-        - List the main risk factors that the company faces (e.g., regulatory risk, market volatility)
+    {{
+        "Executive_Summary": {{
+            "recommendation": "Buy, Hold, or Sell",
+            "price_target": {price_target},
+            "key_drivers": ["Main driver 1", "Main driver 2", "Main driver 3"],
+            "key_risks": ["Main risk 1", "Main risk 2", "Main risk 3"]
+        }},
+        "Company_Overview": {{
+            "description": "A brief description of the company",
+            "products": ["Product 1", "Product 2", "Product 3"],
+            "market": "The main markets where the company operates"
+        }},
+        "Financial_Performance": {{
+            "revenue_q3": "Revenue in dollars (e.g., $100.5 billion)",
+            "net_income_q3": "Net income in dollars (e.g., $10.2 billion)",
+            "eps_q3": "EPS value",
+            "gross_margin": "Gross margin in percentage (e.g., 40%)",
+            "operating_margin": "Operating margin in percentage (e.g., 20%)",
+            "cash_equivalents": "Cash and equivalents in dollars (e.g., $50.5 billion)"
+        }},
+        "Business_Segments": [
+            {{
+                "name": "Segment 1",
+                "revenue": "Revenue in dollars (e.g., $10.5 billion)",
+                "growth_rate": "Growth rate in percentage (e.g., 15%)"
+            }},
+            {{
+                "name": "Segment 2",
+                "revenue": "Revenue in dollars (e.g., $8.5 billion)",
+                "growth_rate": "Growth rate in percentage (e.g., 10%)"
+            }}
+        ],
+        "Competitive_Position": {{
+            "competitors": ["Competitor 1", "Competitor 2"],
+            "market_share": "Market share in percentage (e.g., 40%)",
+            "strengths": ["Strength 1", "Strength 2"],
+            "weaknesses": ["Weakness 1", "Weakness 2"]
+        }},
+        "Valuation_Metrics": {{
+            "pe_ratio": "P/E ratio value",
+            "ev_ebitda": "EV/EBITDA ratio value",
+            "price_sales_ratio": "Price-to-sales ratio value"
+        }},
+        "Risk_Factors": [
+            "Risk factor 1",
+            "Risk factor 2",
+            "Risk factor 3"
+        ]
+    }}
     """
     
     response = client.chat.completions.create(
@@ -189,11 +197,16 @@ def insert_report_data(ticker, sections):
         stock_id = stock_info['stock_id']
         print(f"Found existing stock information for {ticker} with stock_id {stock_id}")
 
-    # Insert into Reports table
-    query_reports = "INSERT INTO Reports (stock_id, report_date) VALUES (%s, %s)"
-    cursor.execute(query_reports, (stock_id, report_date))
+    # Insert into Reports table (now with recommendation and price_target)
+    query_reports = """
+        INSERT INTO Reports (stock_id, report_date, recommendation, price_target)
+        VALUES (%s, %s, %s, %s)
+    """
+    cursor.execute(query_reports, (stock_id, report_date, 
+                                   sections['Executive_Summary']['recommendation'], 
+                                   sections['Executive_Summary']['price_target']))
     conn.commit()
-    report_id = cursor.lastrowid
+    report_id = cursor.lastrowid  # Get the last inserted report_id
     print(f"Inserted report for {ticker} with report_id {report_id}")
 
     # Insert financial performance data
@@ -208,7 +221,7 @@ def insert_report_data(ticker, sections):
             report_id, stock_id, 
             financial_data.get('revenue_q3').replace('$', '').replace(',', ''), 
             financial_data.get('net_income_q3').replace('$', '').replace(',', ''), 
-            financial_data.get('eps_q3'), 
+            financial_data.get('eps_q3').replace('$', ''), 
             financial_data.get('gross_margin').replace('%', ''), 
             financial_data.get('operating_margin').replace('%', ''), 
             financial_data.get('cash_equivalents').replace('$', '').replace(',', '')
@@ -242,12 +255,13 @@ def insert_report_data(ticker, sections):
             INSERT INTO CompetitivePosition (report_id, stock_id, competitor_name, market_share, strengths, weaknesses)
             VALUES (%s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(query_competitors, (
-            report_id, stock_id, ', '.join(competitive_position.get('competitors', [])), 
-            competitive_position.get('market_share').replace('%', ''), 
-            ', '.join(competitive_position.get('strengths', [])), 
-            ', '.join(competitive_position.get('weaknesses', []))
-        ))
+        for competitor in competitive_position['competitors']:
+            cursor.execute(query_competitors, (
+                report_id, stock_id, competitor, 
+                competitive_position['market_share'].replace('%', ''), 
+                ', '.join(competitive_position['strengths']), 
+                ', '.join(competitive_position['weaknesses'])
+            ))
         print(f"Inserted competitive position data for {ticker}")
     else:
         print(f"No competitive position data for {ticker}, skipping.")
