@@ -150,31 +150,92 @@ def parse_report_sections(full_report):
 def insert_report_data(ticker, sections):
     # Get the current date and time
     report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    # Insert into Reports table
-    query_reports = "INSERT INTO Reports (stock_id, report_date) VALUES ((SELECT stock_id FROM StockInformation WHERE ticker_symbol=%s), %s)"
-    cursor.execute(query_reports, (ticker, report_date))
+
+    # Step 1: Retrieve the stock_id from StockInformation table
+    cursor.execute("SELECT stock_id FROM StockInformation WHERE ticker_symbol = %s", (ticker,))
+    stock_info = cursor.fetchone()
+
+    # Check if the stock exists in the StockInformation table
+    if not stock_info:
+        print(f"Error: Stock information not found for ticker {ticker}.")
+        return
+
+    stock_id = stock_info['stock_id']
+
+    # Step 2: Insert into Reports table
+    query_reports = """
+        INSERT INTO Reports (stock_id, report_date) 
+        VALUES (%s, %s)
+    """
+    cursor.execute(query_reports, (stock_id, report_date))
     conn.commit()
     report_id = cursor.lastrowid  # Get the last inserted report_id
-    
-    # Insert into FinancialPerformance table
-    query_financial = "INSERT INTO FinancialPerformance (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents) VALUES (%s, (SELECT stock_id FROM StockInformation WHERE ticker_symbol=%s), %s, %s, %s, %s, %s, %s)"
-    # Example values for placeholders; you should parse these from the report
-    cursor.execute(query_financial, (report_id, ticker, 81800000000, 19900000000, 1.26, 44.3, 30.1, 166000000000))
-    
-    # Insert into BusinessSegments table
-    query_segments = "INSERT INTO BusinessSegments (report_id, stock_id, segment_name, segment_revenue, segment_growth_rate) VALUES (%s, (SELECT stock_id FROM StockInformation WHERE ticker_symbol=%s), %s, %s, %s)"
-    cursor.execute(query_segments, (report_id, ticker, 'iPhone', 39700000000, 1.2))  # Example segment; you should parse from the report
 
-    # Insert into ValuationMetrics table
-    query_valuation = "INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio, valuation_method) VALUES (%s, (SELECT stock_id FROM StockInformation WHERE ticker_symbol=%s), %s, %s, %s, %s)"
-    cursor.execute(query_valuation, (report_id, ticker, 29.1, 22.5, 7.2, 'P/E multiples based on future earnings'))
+    # Step 3: Insert into FinancialPerformance table using extracted data
+    financial_data = sections.get('financial_data', {})
+    query_financial = """
+        INSERT INTO FinancialPerformance 
+        (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(query_financial, (
+        report_id, 
+        stock_id, 
+        financial_data.get('revenue_q3'), 
+        financial_data.get('net_income_q3'), 
+        financial_data.get('eps_q3'), 
+        financial_data.get('gross_margin'), 
+        financial_data.get('operating_margin'), 
+        financial_data.get('cash_equivalents')
+    ))
 
-    # Insert into RiskFactors table
-    query_risk = "INSERT INTO RiskFactors (report_id, stock_id, risk) VALUES (%s, (SELECT stock_id FROM StockInformation WHERE ticker_symbol=%s), %s)"
-    cursor.execute(query_risk, (report_id, ticker, sections['risk_factors']))  # Insert the risk factors from parsed sections
-    
+    # Step 4: Insert into BusinessSegments table using data from parsed sections
+    business_segments = sections.get('business_segments', [])
+    query_segments = """
+        INSERT INTO BusinessSegments (report_id, stock_id, segment_name, segment_revenue, segment_growth_rate)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    for segment in business_segments:
+        cursor.execute(query_segments, (
+            report_id, 
+            stock_id, 
+            segment.get('name'), 
+            segment.get('revenue'), 
+            segment.get('growth_rate')
+        ))
+
+    # Step 5: Insert into ValuationMetrics table using extracted data
+    valuation_data = sections.get('valuation_metrics', {})
+    query_valuation = """
+        INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio, valuation_method)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(query_valuation, (
+        report_id, 
+        stock_id, 
+        valuation_data.get('pe_ratio'), 
+        valuation_data.get('ev_ebitda'), 
+        valuation_data.get('price_sales_ratio'), 
+        valuation_data.get('valuation_method')
+    ))
+
+    # Step 6: Insert into RiskFactors table using extracted data
+    risk_factors = sections.get('risk_factors', [])
+    query_risk = """
+        INSERT INTO RiskFactors (report_id, stock_id, risk)
+        VALUES (%s, %s, %s)
+    """
+    for risk in risk_factors:
+        cursor.execute(query_risk, (
+            report_id, 
+            stock_id, 
+            risk
+        ))
+
+    # Commit all the changes to the database
     conn.commit()
+    print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
+
 
 # Main script to process stock data for predefined tickers
 def process_stocks(tickers):
