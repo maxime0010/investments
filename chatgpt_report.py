@@ -282,18 +282,20 @@ def insert_report_data(ticker, sections):
     else:
         print(f"No competitive position data for {ticker}, skipping.")
 
-    # Insert valuation metrics data
+    # Insert valuation metrics data with 'valuation_method'
     valuation_data = sections.get('Valuation_Metrics', {})
     if valuation_data:
+        valuation_method = "Standard P/E multiples"  # Default value for valuation_method
         query_valuation = """
-            INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio, valuation_method)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         cursor.execute(query_valuation, (
             report_id, stock_id, 
             clean_financial_value(valuation_data['pe_ratio']), 
             clean_financial_value(valuation_data['ev_ebitda']), 
-            clean_financial_value(valuation_data['price_sales_ratio'])
+            clean_financial_value(valuation_data['price_sales_ratio']),
+            valuation_method  # Insert valuation_method
         ))
         print(f"Inserted valuation metrics for {ticker}")
     else:
