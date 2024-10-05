@@ -53,6 +53,17 @@ def fetch_price_target(ticker):
     result = cursor.fetchone()
     return result['avg_combined_criteria'] if result else None
 
+# Function to clean financial values (remove $, commas, and convert to float)
+def clean_financial_value(value):
+    if isinstance(value, str):
+        # Remove $ and commas
+        value = value.replace('$', '').replace(',', '')
+        # Handle values expressed in billions (e.g., $3.23 billion)
+        if 'billion' in value.lower():
+            value = float(value.replace('billion', '').strip()) * 1e9
+        return float(value)
+    return value
+
 # Function to check if a recent report exists
 def is_recent_entry(ticker):
     one_week_ago = (datetime.now() - timedelta(weeks=1)).date()
@@ -97,7 +108,7 @@ def fetch_stock_info_from_chatgpt(ticker):
 # Generate structured report using ChatGPT with explicit JSON-only instruction
 def generate_full_report(ticker, price_target):
     prompt = f"""
-    Generate a detailed stock performance analyst report for the company with the ticker {ticker}.
+    Generate a detailed 5-page stock performance analyst report for the company with the ticker {ticker}.
     Please provide the entire response strictly in JSON format.
     The JSON structure should include the following sections:
 
@@ -219,12 +230,12 @@ def insert_report_data(ticker, sections):
         """
         cursor.execute(query_financial, (
             report_id, stock_id, 
-            financial_data.get('revenue_q3').replace('$', '').replace(',', ''), 
-            financial_data.get('net_income_q3').replace('$', '').replace(',', ''), 
-            financial_data.get('eps_q3').replace('$', ''), 
-            financial_data.get('gross_margin').replace('%', ''), 
-            financial_data.get('operating_margin').replace('%', ''), 
-            financial_data.get('cash_equivalents').replace('$', '').replace(',', '')
+            clean_financial_value(financial_data.get('revenue_q3')), 
+            clean_financial_value(financial_data.get('net_income_q3')), 
+            clean_financial_value(financial_data.get('eps_q3')), 
+            clean_financial_value(financial_data.get('gross_margin')), 
+            clean_financial_value(financial_data.get('operating_margin')), 
+            clean_financial_value(financial_data.get('cash_equivalents'))
         ))
         print(f"Inserted financial performance for {ticker}")
     else:
@@ -241,8 +252,8 @@ def insert_report_data(ticker, sections):
             cursor.execute(query_segments, (
                 report_id, stock_id, 
                 segment['name'], 
-                segment['revenue'].replace('$', '').replace(',', ''), 
-                segment['growth_rate'].replace('%', '')
+                clean_financial_value(segment['revenue']), 
+                clean_financial_value(segment['growth_rate'])
             ))
         print(f"Inserted business segments for {ticker}")
     else:
@@ -258,7 +269,7 @@ def insert_report_data(ticker, sections):
         for competitor in competitive_position['competitors']:
             cursor.execute(query_competitors, (
                 report_id, stock_id, competitor, 
-                competitive_position['market_share'].replace('%', ''), 
+                clean_financial_value(competitive_position['market_share']), 
                 ', '.join(competitive_position['strengths']), 
                 ', '.join(competitive_position['weaknesses'])
             ))
@@ -275,9 +286,9 @@ def insert_report_data(ticker, sections):
         """
         cursor.execute(query_valuation, (
             report_id, stock_id, 
-            valuation_data['pe_ratio'], 
-            valuation_data['ev_ebitda'], 
-            valuation_data['price_sales_ratio']
+            clean_financial_value(valuation_data['pe_ratio']), 
+            clean_financial_value(valuation_data['ev_ebitda']), 
+            clean_financial_value(valuation_data['price_sales_ratio'])
         ))
         print(f"Inserted valuation metrics for {ticker}")
     else:
