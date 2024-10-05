@@ -35,12 +35,14 @@ client = OpenAI(api_key=chatgpt_key)
 try:
     conn = mysql.connector.connect(**db_config)
     cursor = conn.cursor(dictionary=True)  # Using dictionary cursor to access by field names
+    print("Successfully connected to the database")
 except mysql.connector.Error as err:
     print(f"Error: {err}")
     sys.exit()
 
 # Function to fetch price target from 'analysis_simulation' table
 def fetch_price_target(ticker):
+    print(f"Fetching price target for {ticker}")
     query = """
         SELECT avg_combined_criteria
         FROM analysis_simulation
@@ -49,10 +51,16 @@ def fetch_price_target(ticker):
     """
     cursor.execute(query, (ticker,))
     result = cursor.fetchone()
-    return result['avg_combined_criteria'] if result else None
+    if result:
+        print(f"Price target for {ticker}: {result['avg_combined_criteria']}")
+        return result['avg_combined_criteria']
+    else:
+        print(f"No price target found for {ticker}")
+        return None
 
 # Function to check if a report exists for the given ticker in the past week
 def is_recent_entry(ticker):
+    print(f"Checking for recent report for {ticker}")
     one_week_ago = (datetime.now() - timedelta(weeks=1)).date()
 
     query = """
@@ -69,11 +77,15 @@ def is_recent_entry(ticker):
 
     if result:
         last_report_date = result['report_date']
+        print(f"Last report date for {ticker}: {last_report_date}")
         return last_report_date >= one_week_ago
-    return False
+    else:
+        print(f"No recent report found for {ticker}")
+        return False
 
 # Generate full report using ChatGPT with structured data
 def generate_full_report(ticker, price_target):
+    print(f"Generating report for {ticker} with price target: {price_target}")
     prompt = f"""
     Generate a detailed 5-page stock performance analyst report for the company with the ticker {ticker}.
     Please provide the data in structured format for database extraction.
@@ -92,10 +104,13 @@ def generate_full_report(ticker, price_target):
         messages=[{"role": "user", "content": prompt}]
     )
     
-    return response.choices[0].message.content
+    full_report = response.choices[0].message.content
+    print(f"Generated report for {ticker}: \n{full_report}")
+    return full_report
 
 # Centralized function to parse the structured data from ChatGPT into the correct sections
 def parse_report(report):
+    print("Parsing report")
     sections = {
         "executive_summary": {},
         "financial_performance": {},
@@ -154,10 +169,14 @@ def parse_report(report):
         elif "risk" in line:
             sections["risk_factors"].append(line.split(":")[1].strip())
 
+    # Debugging: Print parsed sections for verification
+    print(f"Parsed Sections: {sections}")
+
     return sections
 
 # Function to insert parsed sections into the database
 def insert_report_data(ticker, sections):
+    print(f"Inserting report data for {ticker}")
     report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     cursor.execute("SELECT stock_id FROM StockInformation WHERE ticker_symbol = %s", (ticker,))
@@ -177,64 +196,87 @@ def insert_report_data(ticker, sections):
         cursor.execute(query_insert_stock, (stock_name, ticker, sector, exchange))
         conn.commit()
         stock_id = cursor.lastrowid
+        print(f"Inserted new stock information for {ticker} with stock_id {stock_id}")
     else:
         stock_id = stock_info['stock_id']
+        print(f"Found existing stock information for {ticker} with stock_id {stock_id}")
 
     # Insert into Reports table
     query_reports = "INSERT INTO Reports (stock_id, report_date) VALUES (%s, %s)"
     cursor.execute(query_reports, (stock_id, report_date))
     conn.commit()
     report_id = cursor.lastrowid
+    print(f"Inserted report for {ticker} with report_id {report_id}")
 
-    # Insert financial performance
-    financial_data = sections['financial_performance']
-    query_financial = """
-        INSERT INTO FinancialPerformance 
-        (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    cursor.execute(query_financial, (
-        report_id, stock_id, financial_data['revenue_q3'], financial_data['net_income_q3'], 
-        financial_data['eps_q3'], financial_data['gross_margin'], 
-        financial_data['operating_margin'], financial_data['cash_equivalents']
-    ))
+    # Insert financial performance data (check for existence of data)
+    financial_data = sections.get('financial_performance', {})
+    if not financial_data or 'revenue_q3' not in financial_data:
+        print(f"Error: Missing financial data for {ticker}. Skipping financial performance insertion.")
+    else:
+        query_financial = """
+            INSERT INTO FinancialPerformance 
+            (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        cursor.execute(query_financial, (
+            report_id, stock_id, financial_data.get('revenue_q3'), financial_data.get('net_income_q3'), 
+            financial_data.get('eps_q3'), financial_data.get('gross_margin'), 
+            financial_data.get('operating_margin'), financial_data.get('cash_equivalents')
+        ))
+        print(f"Inserted financial performance for {ticker}")
 
-    # Insert business segments
+    # Insert business segments data
     query_segments = """
         INSERT INTO BusinessSegments (report_id, stock_id, segment_name, segment_revenue, segment_growth_rate)
         VALUES (%s, %s, %s, %s, %s)
     """
-    for segment in sections['business_segments']:
-        cursor.execute(query_segments, (
-            report_id, stock_id, segment['segment_name'], segment['segment_revenue'], segment['segment_growth_rate']
-        ))
+    if sections['business_segments']:
+        for segment in sections['business_segments']:
+            cursor.execute(query_segments, (
+                report_id, stock_id, segment['segment_name'], segment['segment_revenue'], segment['segment_growth_rate']
+            ))
+        print(f"Inserted business segments for {ticker}")
+    else:
+        print(f"No business segments data for {ticker}")
 
-    # Insert competitive position
+    # Insert competitive position data
     query_competitors = """
         INSERT INTO CompetitivePosition (report_id, stock_id, competitor_name, market_share, strengths, weaknesses)
         VALUES (%s, %s, %s, %s, %s, %s)
     """
-    for competitor in sections['competitive_position']:
-        cursor.execute(query_competitors, (
-            report_id, stock_id, competitor['competitor_name'], competitor['market_share'], 
-            competitor['strengths'], competitor['weaknesses']
-        ))
+    if sections['competitive_position']:
+        for competitor in sections['competitive_position']:
+            cursor.execute(query_competitors, (
+                report_id, stock_id, competitor['competitor_name'], competitor['market_share'], 
+                competitor['strengths'], competitor['weaknesses']
+            ))
+        print(f"Inserted competitive position data for {ticker}")
+    else:
+        print(f"No competitive position data for {ticker}")
 
-    # Insert valuation metrics
+    # Insert valuation metrics data
     valuation_data = sections['valuation_metrics']
-    query_valuation = """
-        INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio)
-        VALUES (%s, %s, %s, %s, %s)
-    """
-    cursor.execute(query_valuation, (
-        report_id, stock_id, valuation_data['pe_ratio'], valuation_data['ev_ebitda'], 
-        valuation_data['price_sales_ratio']
-    ))
+    if valuation_data:
+        query_valuation = """
+            INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(query_valuation, (
+            report_id, stock_id, valuation_data['pe_ratio'], valuation_data['ev_ebitda'], 
+            valuation_data['price_sales_ratio']
+        ))
+        print(f"Inserted valuation metrics for {ticker}")
+    else:
+        print(f"No valuation metrics data for {ticker}")
 
-    # Insert risk factors
+    # Insert risk factors data
     query_risks = "INSERT INTO RiskFactors (report_id, stock_id, risk) VALUES (%s, %s, %s)"
-    for risk in sections['risk_factors']:
-        cursor.execute(query_risks, (report_id, stock_id, risk))
+    if sections['risk_factors']:
+        for risk in sections['risk_factors']:
+            cursor.execute(query_risks, (report_id, stock_id, risk))
+        print(f"Inserted risk factors for {ticker}")
+    else:
+        print(f"No risk factors data for {ticker}")
 
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
