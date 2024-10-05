@@ -146,6 +146,23 @@ def parse_report_sections(full_report):
 
     return sections
 
+# Function to query ChatGPT API to get stock information
+def fetch_stock_info_from_chatgpt(ticker):
+    # Create a prompt to request stock information (e.g., name, sector, and exchange)
+    prompt = f"Provide the full company name, sector, and stock exchange for the ticker symbol {ticker}."
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        stock_info = response['choices'][0]['message']['content']
+        return stock_info
+    except Exception as e:
+        print(f"Error fetching stock information from ChatGPT for {ticker}: {e}")
+        return None
+
 # Function to insert parsed sections into the appropriate tables in the database
 def insert_report_data(ticker, sections):
     # Get the current date and time
@@ -156,14 +173,25 @@ def insert_report_data(ticker, sections):
     stock_info = cursor.fetchone()
 
     if not stock_info:
-        # If stock info is missing, insert a new row into the StockInformation table
-        print(f"Stock information not found for ticker {ticker}. Adding it to the StockInformation table.")
+        print(f"Stock information not found for ticker {ticker}. Fetching it from ChatGPT API.")
+
+        # Use ChatGPT to retrieve stock information
+        stock_info_text = fetch_stock_info_from_chatgpt(ticker)
+        if not stock_info_text:
+            print(f"Failed to retrieve stock information for ticker {ticker}. Skipping.")
+            return
         
-        # Example values for stock_name, sector, and exchange, replace with actual data or fetch dynamically
-        stock_name = input(f"Enter the full name for {ticker}: ")  # You could automate this if you have the data
-        sector = input(f"Enter the sector for {ticker}: ")  # This can also be automated based on a source of truth
-        exchange = "NASDAQ"  # Example exchange, this could also be dynamic
-        
+        # Parsing the stock information from the ChatGPT response (custom parsing based on response format)
+        # Example response: "The company name is Amazon.com Inc., the sector is Technology, and the exchange is NASDAQ."
+        try:
+            stock_name = stock_info_text.split("company name is")[1].split(",")[0].strip()
+            sector = stock_info_text.split("sector is")[1].split(",")[0].strip()
+            exchange = stock_info_text.split("exchange is")[1].split(".")[0].strip()
+        except IndexError as e:
+            print(f"Error parsing stock information from ChatGPT response: {e}")
+            return
+
+        # Insert the stock into StockInformation
         query_insert_stock = """
             INSERT INTO StockInformation (stock_name, ticker_symbol, sector, exchange) 
             VALUES (%s, %s, %s, %s)
@@ -249,6 +277,7 @@ def insert_report_data(ticker, sections):
     # Commit all the changes to the database
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
+
 
 
 # Main script to process stock data for predefined tickers
