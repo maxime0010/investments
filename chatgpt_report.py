@@ -42,7 +42,7 @@ except mysql.connector.Error as err:
 # Function to fetch expected return (price target) from 'analysis_simulation' table
 def fetch_price_target(ticker):
     query = """
-        SELECT price_target
+        SELECT avg_combined_criteria
         FROM analysis_simulation
         WHERE ticker = %s
         ORDER BY date DESC LIMIT 1
