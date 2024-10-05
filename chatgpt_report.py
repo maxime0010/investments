@@ -1,7 +1,7 @@
+import openai
 import os
 import sys
 import mysql.connector
-from openai import OpenAI
 from datetime import datetime, timedelta
 
 # Define the list of tickers (Amazon, Adobe, Nvidia)
@@ -28,8 +28,8 @@ db_config = {
     'port': 25060
 }
 
-# Initialize OpenAI client
-openai_client = OpenAI(api_key=chatgpt_key)
+# Set the OpenAI API key
+openai.api_key = chatgpt_key
 
 # Establish MySQL connection
 try:
@@ -74,7 +74,6 @@ def is_recent_entry(ticker):
         return last_report_date >= one_week_ago
     return False
 
-
 # Function to generate the full 5-page report using ChatGPT
 def generate_full_report(ticker, price_target):
     prompt = f"""
@@ -104,12 +103,12 @@ def generate_full_report(ticker, price_target):
     Generate the report in sections with a clear and professional tone.
     """
     
-    response = openai_client.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
     
-    full_report = response.choices[0].message.content
+    full_report = response.choices[0]['message']['content']
     return full_report
 
 # Function to parse the full report into individual sections (e.g., financial performance, business segments)
@@ -277,8 +276,6 @@ def insert_report_data(ticker, sections):
     # Commit all the changes to the database
     conn.commit()
     print(f"Successfully inserted report data for {ticker} (Report ID: {report_id}).")
-
-
 
 # Main script to process stock data for predefined tickers
 def process_stocks(tickers):
