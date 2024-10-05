@@ -144,11 +144,9 @@ def generate_full_report(ticker, price_target):
 def parse_report_sections(full_report):
     sections = {}
 
-    # Extracting the structured parts of the report directly from the formatted data
-    # For simplicity, assuming the structure returned matches the request
     lines = full_report.split('\n')
 
-    # Parse each section into the dictionary
+    # Parse each section into the dictionary (adjust according to the structure of the report)
     for line in lines:
         line = line.strip()
 
