@@ -151,16 +151,30 @@ def insert_report_data(ticker, sections):
     # Get the current date and time
     report_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # Step 1: Retrieve the stock_id from StockInformation table
+    # Step 1: Retrieve the stock_id from StockInformation table or insert if it doesn't exist
     cursor.execute("SELECT stock_id FROM StockInformation WHERE ticker_symbol = %s", (ticker,))
     stock_info = cursor.fetchone()
 
-    # Check if the stock exists in the StockInformation table
     if not stock_info:
-        print(f"Error: Stock information not found for ticker {ticker}.")
-        return
+        # If stock info is missing, insert a new row into the StockInformation table
+        print(f"Stock information not found for ticker {ticker}. Adding it to the StockInformation table.")
+        
+        # Example values for stock_name, sector, and exchange, replace with actual data or fetch dynamically
+        stock_name = input(f"Enter the full name for {ticker}: ")  # You could automate this if you have the data
+        sector = input(f"Enter the sector for {ticker}: ")  # This can also be automated based on a source of truth
+        exchange = "NASDAQ"  # Example exchange, this could also be dynamic
+        
+        query_insert_stock = """
+            INSERT INTO StockInformation (stock_name, ticker_symbol, sector, exchange) 
+            VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(query_insert_stock, (stock_name, ticker, sector, exchange))
+        conn.commit()
 
-    stock_id = stock_info['stock_id']
+        # Retrieve the newly inserted stock_id
+        stock_id = cursor.lastrowid
+    else:
+        stock_id = stock_info['stock_id']
 
     # Step 2: Insert into Reports table
     query_reports = """
