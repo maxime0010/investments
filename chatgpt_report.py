@@ -3,6 +3,7 @@ import sys
 import mysql.connector
 from openai import OpenAI
 from datetime import datetime, timedelta
+import json
 
 # Define the list of tickers
 tickers = ['AMZN', 'ADBE', 'NVDA']
@@ -98,14 +99,12 @@ def generate_full_report(ticker, price_target):
 
 # Parse the structured report into a dictionary format
 def parse_report(report):
-    # Assuming the ChatGPT response is structured and JSON-like, directly parse it
-    import json
     try:
         parsed_data = json.loads(report)
         print(f"Parsed Report Data: {parsed_data}")
         return parsed_data
-    except json.JSONDecodeError:
-        print("Error: Failed to parse the report as JSON. Check the structure of the report.")
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse the report as JSON. {e}")
         return None
 
 # Insert parsed sections into the database
@@ -117,7 +116,7 @@ def insert_report_data(ticker, sections):
     stock_info = cursor.fetchone()
 
     if not stock_info:
-        print(f"Stock information not found for {ticker}. Fetching it from ChatGPT API.")
+        print(f"Stock information not found for ticker {ticker}. Fetching it from ChatGPT API.")
         stock_info_text = fetch_stock_info_from_chatgpt(ticker)
         lines = stock_info_text.split('\n')
         stock_name = next(line.split(":")[1].strip() for line in lines if "Company Name" in line)
@@ -143,8 +142,9 @@ def insert_report_data(ticker, sections):
     print(f"Inserted report for {ticker} with report_id {report_id}")
 
     # Insert financial performance data
-    financial_data = sections.get('financial_performance', {})
+    financial_data = sections.get('Financial Performance', {})
     if financial_data:
+        print(f"Financial data for {ticker}: {financial_data}")
         query_financial = """
             INSERT INTO FinancialPerformance 
             (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents)
@@ -160,39 +160,42 @@ def insert_report_data(ticker, sections):
         print(f"Financial data missing for {ticker}, skipping.")
 
     # Insert business segments data
-    business_segments = sections.get('business_segments', [])
+    business_segments = sections.get('Business Segments', [])
     if business_segments:
+        print(f"Business segments for {ticker}: {business_segments}")
         query_segments = """
             INSERT INTO BusinessSegments (report_id, stock_id, segment_name, segment_revenue, segment_growth_rate)
             VALUES (%s, %s, %s, %s, %s)
         """
         for segment in business_segments:
             cursor.execute(query_segments, (
-                report_id, stock_id, segment['segment_name'], segment['segment_revenue'], segment['segment_growth_rate']
+                report_id, stock_id, segment['name'], segment['revenue'], segment['growth_rate']
             ))
         print(f"Inserted business segments for {ticker}")
     else:
         print(f"No business segments data for {ticker}, skipping.")
 
     # Insert competitive position data
-    competitive_position = sections.get('competitive_position', [])
+    competitive_position = sections.get('Competitive Position', {})
     if competitive_position:
+        print(f"Competitive position for {ticker}: {competitive_position}")
         query_competitors = """
             INSERT INTO CompetitivePosition (report_id, stock_id, competitor_name, market_share, strengths, weaknesses)
             VALUES (%s, %s, %s, %s, %s, %s)
         """
-        for competitor in competitive_position:
-            cursor.execute(query_competitors, (
-                report_id, stock_id, competitor['competitor_name'], competitor['market_share'], 
-                competitor['strengths'], competitor['weaknesses']
-            ))
+        cursor.execute(query_competitors, (
+            report_id, stock_id, ', '.join(competitive_position.get('competitors', [])), 
+            competitive_position.get('market_share'), ', '.join(competitive_position.get('strengths', [])), 
+            ', '.join(competitive_position.get('weaknesses', []))
+        ))
         print(f"Inserted competitive position data for {ticker}")
     else:
         print(f"No competitive position data for {ticker}, skipping.")
 
     # Insert valuation metrics data
-    valuation_data = sections.get('valuation_metrics', {})
+    valuation_data = sections.get('Valuation Metrics', {})
     if valuation_data:
+        print(f"Valuation metrics for {ticker}: {valuation_data}")
         query_valuation = """
             INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio)
             VALUES (%s, %s, %s, %s, %s)
@@ -206,8 +209,9 @@ def insert_report_data(ticker, sections):
         print(f"No valuation metrics data for {ticker}, skipping.")
 
     # Insert risk factors data
-    risk_factors = sections.get('risk_factors', [])
+    risk_factors = sections.get('Risk Factors', [])
     if risk_factors:
+        print(f"Risk factors for {ticker}: {risk_factors}")
         query_risks = "INSERT INTO RiskFactors (report_id, stock_id, risk) VALUES (%s, %s, %s)"
         for risk in risk_factors:
             cursor.execute(query_risks, (report_id, stock_id, risk))
