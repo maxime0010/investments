@@ -51,21 +51,29 @@ def fetch_price_target(ticker):
     result = cursor.fetchone()
     return result[0] if result else None
 
-# Function to check if a recommendation has been made in the last week
+# Function to check if a report has been generated in the last week for the given ticker
 def is_recent_entry(ticker):
     one_week_ago = datetime.now() - timedelta(weeks=1)
+
+    # Query to check if a report for the given ticker has been generated within the last week
     query = """
-        SELECT date
-        FROM chatgpt_report
-        WHERE ticker = %s
-        ORDER BY date DESC LIMIT 1
+        SELECT r.report_date
+        FROM Reports r
+        JOIN StockInformation s ON r.stock_id = s.stock_id
+        WHERE s.ticker_symbol = %s
+        ORDER BY r.report_date DESC
+        LIMIT 1
     """
+    
     cursor.execute(query, (ticker,))
     result = cursor.fetchone()
+    
+    # If a result is found, check if the last report date is within the last week
     if result:
-        last_entry_date = result[0]
-        return last_entry_date >= one_week_ago
+        last_report_date = result[0]
+        return last_report_date >= one_week_ago
     return False
+
 
 # Function to generate the full 5-page report using ChatGPT
 def generate_full_report(ticker, price_target):
