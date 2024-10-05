@@ -207,6 +207,9 @@ def parse_report_sections(full_report):
         elif line.startswith("risks"):
             sections['risk_factors'] = []
 
+    # Debugging: Print parsed sections for validation
+    print(f"Parsed Sections: {sections}")
+
     return sections
 
 # Insert parsed sections into the database
@@ -242,6 +245,8 @@ def insert_report_data(ticker, sections):
             INSERT INTO StockInformation (stock_name, ticker_symbol, sector, exchange) 
             VALUES (%s, %s, %s, %s)
         """
+        # Debugging: Print the query and parameters
+        print(f"Executing SQL: {query_insert_stock} with values ({stock_name}, {ticker}, {sector}, {exchange})")
         cursor.execute(query_insert_stock, (stock_name, ticker, sector, exchange))
         conn.commit()
 
@@ -254,6 +259,7 @@ def insert_report_data(ticker, sections):
         INSERT INTO Reports (stock_id, report_date) 
         VALUES (%s, %s)
     """
+    print(f"Executing SQL: {query_reports} with values ({stock_id}, {report_date})")  # Debugging
     cursor.execute(query_reports, (stock_id, report_date))
     conn.commit()
     report_id = cursor.lastrowid  # Get the last inserted report_id
@@ -271,6 +277,7 @@ def insert_report_data(ticker, sections):
         (report_id, stock_id, revenue_q3, net_income_q3, eps_q3, gross_margin, operating_margin, cash_equivalents)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
+    print(f"Executing SQL: {query_financial} with values {financial_data}")  # Debugging
     cursor.execute(query_financial, (
         report_id, 
         stock_id, 
@@ -289,6 +296,7 @@ def insert_report_data(ticker, sections):
         VALUES (%s, %s, %s, %s, %s)
     """
     for segment in business_segments:
+        print(f"Executing SQL: {query_segments} with values {segment}")  # Debugging
         cursor.execute(query_segments, (
             report_id, 
             stock_id, 
@@ -304,6 +312,7 @@ def insert_report_data(ticker, sections):
         VALUES (%s, %s, %s, %s, %s, %s)
     """
     for competitor in competitive_position:
+        print(f"Executing SQL: {query_competition} with values {competitor}")  # Debugging
         cursor.execute(query_competition, (
             report_id,
             stock_id,
@@ -319,6 +328,7 @@ def insert_report_data(ticker, sections):
         INSERT INTO ValuationMetrics (report_id, stock_id, pe_ratio, ev_ebitda, price_sales_ratio, valuation_method)
         VALUES (%s, %s, %s, %s, %s, %s)
     """
+    print(f"Executing SQL: {query_valuation} with values {valuation_data}")  # Debugging
     cursor.execute(query_valuation, (
         report_id, 
         stock_id, 
@@ -335,6 +345,7 @@ def insert_report_data(ticker, sections):
         VALUES (%s, %s, %s)
     """
     for risk in risk_factors:
+        print(f"Executing SQL: {query_risks} with values ({report_id}, {stock_id}, {risk})")  # Debugging
         cursor.execute(query_risks, (
             report_id, 
             stock_id, 
