@@ -6,3 +6,5 @@ python-dotenv
 mysql-connector-python
 pandas
 openai
+PyPDF2
+pdfplumber
