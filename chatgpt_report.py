@@ -59,11 +59,14 @@ def find_files_in_directory():
     files_to_process = []
     base_dir = '/files'
     for subdir, dirs, files in os.walk(base_dir):
+        print(f"Checking directory: {subdir}")  # Debugging log to see which directories are being checked
         for file in files:
+            print(f"Found file: {file} in {subdir}")  # Debugging log to see found files
             file_path = os.path.join(subdir, file)
             ticker = os.path.basename(subdir)  # Subfolder name is the ticker
             files_to_process.append((file_path, ticker))
     return files_to_process
+
 
 # Function to send the file to ChatGPT API and generate questions and answers
 def generate_questions_from_report(file_path, ticker):
