@@ -1,6 +1,7 @@
 import os
 import sys
 import mysql.connector
+import pdfplumber
 from openai import OpenAI
 from datetime import datetime
 import json
@@ -69,10 +70,30 @@ def find_files_in_directory():
 
 
 
-# Function to send the file to ChatGPT API and generate questions and answers
+# Function to extract text from a PDF file
+def extract_text_from_pdf(file_path):
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() + "\n"
+        return text
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        return None
+
+# Function to send the file (PDF text) to ChatGPT API and generate questions and answers
 def generate_questions_from_report(file_path, ticker):
-    with open(file_path, 'r') as report_file:
-        report_content = report_file.read()
+    if file_path.lower().endswith('.pdf'):
+        # Extract text from the PDF
+        report_content = extract_text_from_pdf(file_path)
+        if report_content is None:
+            print(f"Failed to extract text from {file_path}")
+            return None
+    else:
+        # For other formats (if needed), you can extend here
+        with open(file_path, 'r') as report_file:
+            report_content = report_file.read()
 
     prompt = f"""
     As an investment analyst, could you generate 20 questions and answers based on this annual report? It should support decision to invest or not, be strategic and business oriented. Please structure around 4 categories: strengths, weaknesses, opportunities, threats. 5 questions and answers in each category. You are an analyst, so the questions and answers should extract deep insights for the reader and help him decide if he should invest or not. Each answer should have approximately 500 words and be structured and argumented.
@@ -81,13 +102,15 @@ def generate_questions_from_report(file_path, ticker):
 
     Please structure the output as a JSON as it will be used as an input for a python request to insert in a database.
     """
-    
+
+    # Send the extracted report content to the ChatGPT API
     response = client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}]
     )
-    
+
     return response.choices[0].message.content
+
 
 # Function to parse the response into a JSON structure
 def parse_json_response(response):
