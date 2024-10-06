@@ -54,10 +54,10 @@ def create_table():
     cursor.execute(create_table_query)
     conn.commit()
 
-# Function to check for files in /files directory and subfolders
+# Function to check for files in ./files directory and subfolders
 def find_files_in_directory():
     files_to_process = []
-    base_dir = '/files'
+    base_dir = './files'  # Use relative path to the folder 'files'
     for subdir, dirs, files in os.walk(base_dir):
         print(f"Checking directory: {subdir}")  # Debugging log to see which directories are being checked
         for file in files:
@@ -66,6 +66,7 @@ def find_files_in_directory():
             ticker = os.path.basename(subdir)  # Subfolder name is the ticker
             files_to_process.append((file_path, ticker))
     return files_to_process
+
 
 
 # Function to send the file to ChatGPT API and generate questions and answers
