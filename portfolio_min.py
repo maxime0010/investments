@@ -1,5 +1,5 @@
 import os
-import mysql.connector  # Added mysql.connector import
+import mysql.connector
 from datetime import datetime, timedelta
 from decimal import Decimal
 from config import DAYS_RECENT, SUCCESS_RATE_THRESHOLD, MIN_ANALYSTS
@@ -58,7 +58,8 @@ def fetch_portfolio_for_date(cursor, date):
         FROM analysis_simulation
         WHERE date = %s 
         AND num_combined_criteria >= %s
-        AND stddev_combined_criteria <= 50  -- New criterion: standard deviation <= 100
+        AND stddev_combined_criteria <= 100  -- New criterion: standard deviation <= 100
+        AND expected_return_combined_criteria >= 20  -- Minimum expected return of 20%
         ORDER BY expected_return_combined_criteria DESC
         LIMIT 10
     """
@@ -137,7 +138,7 @@ def simulate_portfolio(retries=3):
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
-        # Initialize the first portfolio value (100 total, to be reinvested)
+        # Initialize the first portfolio value (100 total to be reinvested)
         initial_date = date_list[0]
         initial_portfolio = fetch_portfolio_for_date(cursor, initial_date)
         closing_prices = get_closing_prices_as_of(cursor, initial_date)
