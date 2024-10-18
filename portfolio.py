@@ -151,7 +151,7 @@ def insert_new_portfolio_simulation(cursor, today, new_portfolio, closing_prices
 # Execution
 try:
     # Check if today is Sunday (6 = Sunday in weekday() method)
-    if datetime.today().weekday() == 4:
+    if datetime.today().weekday() == 6:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
 
