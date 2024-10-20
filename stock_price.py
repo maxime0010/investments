@@ -56,7 +56,7 @@ sp500_tickers = [
     'TROW', 'TTWO', 'TPR', 'TRGP', 'TGT', 'TEL', 'TDY', 'TFX', 'TER', 'TSLA', 'TXN', 'TXT', 'TMO', 'TJX', 'TSCO', 'TT', 'TDG', 
     'TRV', 'TRMB', 'TFC', 'TYL', 'TSN', 'USB', 'UBER', 'UDR', 'ULTA', 'UNP', 'UAL', 'UPS', 'URI', 'UNH', 'UHS', 'VLO', 'VTR', 
     'VLTO', 'VRSN', 'VRSK', 'VZ', 'VRTX', 'VTRS', 'VICI', 'V', 'VST', 'VMC', 'WRB', 'GWW', 'WAB', 'WBA', 'WMT', 'DIS', 'WBD', 
-    'WM', 'WAT', 'WEC', 'WFC', 'WELL', 'WST', 'WDC', 'WY', 'WMB', 'WTW', 'WYNN', 'XEL', 'XYL', 'YUM', 'ZBRA', 'ZBH', 'ZTS', 'SPX'
+    'WM', 'WAT', 'WEC', 'WFC', 'WELL', 'WST', 'WDC', 'WY', 'WMB', 'WTW', 'WYNN', 'XEL', 'XYL', 'YUM', 'ZBRA', 'ZBH', 'ZTS'
 
 ]
 
@@ -120,6 +120,40 @@ def is_data_up_to_date():
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         return False
+
+
+def fetch_sp500_index():
+    """Fetch the latest S&P 500 index value."""
+    index_symbol = "SPX"  # S&P 500 symbol for the API
+    base_url = f"https://api.marketdata.app/v1/indices/quotes/{index_symbol}/"
+    
+    try:
+        headers = {"Authorization": f"Bearer {marketdata_api_key}"}
+        response = requests.get(base_url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get("s") == "ok":
+            last_price = data['last'][0]
+            timestamp = int(data['updated'][0])
+            date = datetime.utcfromtimestamp(timestamp).strftime('%Y-%m-%d')
+
+            sp500_data = {
+                'ticker': 'SPX',
+                'date': date,
+                'close': last_price
+            }
+
+            print(f"Fetched S&P 500 value: {last_price} on {date}")
+            return sp500_data
+        else:
+            print(f"Failed to fetch S&P 500 index data")
+            return None
+
+    except requests.exceptions.HTTPError as http_err:
+        print(f"HTTP error occurred: {http_err}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 
 def fetch_and_store_prices(tickers):
