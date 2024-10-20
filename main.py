@@ -22,7 +22,6 @@ def run_script(script_name):
 
 # Latest version
 run_script("price_target_history.py")
-run_script("price_history.py")
 run_script("analysts.py")
 run_script("stock_price.py")
 run_script("analysis_simulation.py")
