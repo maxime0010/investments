@@ -87,35 +87,37 @@ def insert_rating_data(rating_data, cursor):
             updated = VALUES(updated)
         """)
 
-
         added_ratings = 0
         for rating in rating_data:
-            # Safely cast each value to the appropriate data type
+            # Safely cast each value to the appropriate data type and handle missing keys
             rating['adjusted_pt_current'] = safe_cast(rating.get('adjusted_pt_current'), float, None)
             rating['adjusted_pt_prior'] = safe_cast(rating.get('adjusted_pt_prior'), float, None)
             rating['pt_current'] = safe_cast(rating.get('pt_current'), float, None)
             rating['pt_prior'] = safe_cast(rating.get('pt_prior'), float, None)
-
+            
+            # Handle missing 'analyst_name' and other optional fields
             try:
                 cursor.execute(add_rating, (
-                    rating['id'], rating['action_company'], rating['action_pt'], rating['adjusted_pt_current'], 
-                    rating['adjusted_pt_prior'], rating['analyst'], rating['analyst_name'], rating['currency'], 
-                    rating['date'], rating['exchange'], rating['importance'], rating['name'], rating['notes'], 
-                    rating['pt_current'], rating['pt_prior'], rating['rating_current'], rating['rating_prior'], 
-                    rating['ticker'], rating['time'], rating['updated'], rating['url'], rating['url_calendar'], 
-                    rating['url_news']
+                    rating.get('id', None), rating.get('action_company', ''), rating.get('action_pt', ''),
+                    rating['adjusted_pt_current'], rating['adjusted_pt_prior'], rating.get('analyst', ''),
+                    rating.get('analyst_name', ''), rating.get('currency', ''), rating.get('date', ''),
+                    rating.get('exchange', ''), rating.get('importance', 0), rating.get('name', ''),
+                    rating.get('notes', ''), rating['pt_current'], rating['pt_prior'],
+                    rating.get('rating_current', ''), rating.get('rating_prior', ''), rating.get('ticker', ''),
+                    rating.get('time', ''), rating.get('updated', ''), rating.get('url', ''),
+                    rating.get('url_calendar', ''), rating.get('url_news', '')
                 ))
                 added_ratings += 1
             except mysql.connector.Error as err:
-                print(f"Error inserting rating data for {rating['ticker']} at {rating['date']}: {err}")
+                print(f"Error inserting rating data for {rating.get('ticker', '')} at {rating.get('date', '')}: {err}")
                 continue  # Skip to the next rating if there's an issue with the current one
 
         return added_ratings
 
-
     except mysql.connector.Error as err:
         print(f"Error inserting rating data: {err}")
         return 0
+
 
 def fetch_ratings_for_september(ticker, cursor):
     """Fetch ratings for September 2024 for the given ticker."""
