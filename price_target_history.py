@@ -95,7 +95,7 @@ def insert_rating_data(rating_data, cursor):
             rating['pt_current'] = safe_cast(rating.get('pt_current'), float, None)
             rating['pt_prior'] = safe_cast(rating.get('pt_prior'), float, None)
             
-            # Handle missing 'analyst_name' and other optional fields
+            # Insert rating data, providing default values for missing fields
             try:
                 cursor.execute(add_rating, (
                     rating.get('id', None), rating.get('action_company', ''), rating.get('action_pt', ''),
@@ -117,6 +117,7 @@ def insert_rating_data(rating_data, cursor):
     except mysql.connector.Error as err:
         print(f"Error inserting rating data: {err}")
         return 0
+
 
 
 def fetch_ratings_for_september(ticker, cursor):
