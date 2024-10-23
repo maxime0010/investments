@@ -76,10 +76,7 @@ def insert_rating_data(rating_data, cursor):
             (id, action_company, action_pt, adjusted_pt_current, adjusted_pt_prior, analyst, analyst_name,
              currency, date, exchange, importance, name, notes, pt_current, pt_prior, rating_current, 
              rating_prior, ticker, time, updated, url, url_calendar, url_news) 
-            VALUES (%(id)s, %(action_company)s, %(action_pt)s, %(adjusted_pt_current)s, %(adjusted_pt_prior)s, 
-                    %(analyst)s, %(analyst_name)s, %(currency)s, %(date)s, %(exchange)s, %(importance)s, 
-                    %(name)s, %(notes)s, %(pt_current)s, %(pt_prior)s, %(rating_current)s, %(rating_prior)s, 
-                    %(ticker)s, %(time)s, %(updated)s, %(url)s, %(url_calendar)s, %(url_news)s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
             adjusted_pt_current = VALUES(adjusted_pt_current), 
             adjusted_pt_prior = VALUES(adjusted_pt_prior), 
@@ -90,6 +87,7 @@ def insert_rating_data(rating_data, cursor):
             updated = VALUES(updated)
         """)
 
+
         added_ratings = 0
         for rating in rating_data:
             # Safely cast each value to the appropriate data type
@@ -99,13 +97,21 @@ def insert_rating_data(rating_data, cursor):
             rating['pt_prior'] = safe_cast(rating.get('pt_prior'), float, None)
 
             try:
-                cursor.execute(add_rating, rating)
+                cursor.execute(add_rating, (
+                    rating['id'], rating['action_company'], rating['action_pt'], rating['adjusted_pt_current'], 
+                    rating['adjusted_pt_prior'], rating['analyst'], rating['analyst_name'], rating['currency'], 
+                    rating['date'], rating['exchange'], rating['importance'], rating['name'], rating['notes'], 
+                    rating['pt_current'], rating['pt_prior'], rating['rating_current'], rating['rating_prior'], 
+                    rating['ticker'], rating['time'], rating['updated'], rating['url'], rating['url_calendar'], 
+                    rating['url_news']
+                ))
                 added_ratings += 1
             except mysql.connector.Error as err:
                 print(f"Error inserting rating data for {rating['ticker']} at {rating['date']}: {err}")
                 continue  # Skip to the next rating if there's an issue with the current one
 
         return added_ratings
+
 
     except mysql.connector.Error as err:
         print(f"Error inserting rating data: {err}")
