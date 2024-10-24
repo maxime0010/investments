@@ -69,7 +69,7 @@ def safe_cast(value, target_type, default=None):
         return default
 
 def insert_rating_data(rating_data, cursor):
-    """Insert rating data into the MySQL database with added debug statements."""
+    """Insert rating data into the MySQL database with debug statements."""
     try:
         add_rating = ("""
             INSERT INTO ratings 
@@ -98,34 +98,26 @@ def insert_rating_data(rating_data, cursor):
             # Debug: Print the rating data before inserting
             print(f"Attempting to insert rating: {rating}")
             
-            # Insert rating data, providing default values for missing fields
+            # Manually construct the SQL query for debugging purposes
+            sql_values = (
+                rating.get('id', None), rating.get('action_company', ''), rating.get('action_pt', ''),
+                rating['adjusted_pt_current'], rating['adjusted_pt_prior'], rating.get('analyst', ''),
+                rating.get('analyst_name', ''), rating.get('currency', ''), rating.get('date', ''),
+                rating.get('exchange', ''), rating.get('importance', 0), rating.get('name', ''),
+                rating.get('notes', ''), rating['pt_current'], rating['pt_prior'],
+                rating.get('rating_current', ''), rating.get('rating_prior', ''), rating.get('ticker', ''),
+                rating.get('time', ''), rating.get('updated', ''), rating.get('url', ''),
+                rating.get('url_calendar', ''), rating.get('url_news', '')
+            )
+            
+            # Insert rating data
             try:
-                cursor.execute(add_rating, (
-                    rating.get('id', None), rating.get('action_company', ''), rating.get('action_pt', ''),
-                    rating['adjusted_pt_current'], rating['adjusted_pt_prior'], rating.get('analyst', ''),
-                    rating.get('analyst_name', ''), rating.get('currency', ''), rating.get('date', ''),
-                    rating.get('exchange', ''), rating.get('importance', 0), rating.get('name', ''),
-                    rating.get('notes', ''), rating['pt_current'], rating['pt_prior'],
-                    rating.get('rating_current', ''), rating.get('rating_prior', ''), rating.get('ticker', ''),
-                    rating.get('time', ''), rating.get('updated', ''), rating.get('url', ''),
-                    rating.get('url_calendar', ''), rating.get('url_news', '')
-                ))
+                cursor.execute(add_rating, sql_values)
                 added_ratings += 1
             except mysql.connector.Error as err:
-                # Debug: Print error details
+                # Debug: Print error details and SQL statement
                 print(f"Error inserting rating data for {rating.get('ticker', '')} at {rating.get('date', '')}: {err}")
-                # Correctly format the SQL statement debug output
-                sql_statement = cursor.mogrify(add_rating, (
-                    rating.get('id', None), rating.get('action_company', ''), rating.get('action_pt', ''),
-                    rating['adjusted_pt_current'], rating['adjusted_pt_prior'], rating.get('analyst', ''),
-                    rating.get('analyst_name', ''), rating.get('currency', ''), rating.get('date', ''),
-                    rating.get('exchange', ''), rating.get('importance', 0), rating.get('name', ''),
-                    rating.get('notes', ''), rating['pt_current'], rating['pt_prior'],
-                    rating.get('rating_current', ''), rating.get('rating_prior', ''), rating.get('ticker', ''),
-                    rating.get('time', ''), rating.get('updated', ''), rating.get('url', ''),
-                    rating.get('url_calendar', ''), rating.get('url_news', '')
-                ))
-                print(f"SQL Statement: {sql_statement.decode('utf-8')}")
+                print(f"SQL Statement: {add_rating % sql_values}")
                 continue  # Skip to the next rating if there's an issue with the current one
 
         return added_ratings
@@ -133,6 +125,7 @@ def insert_rating_data(rating_data, cursor):
     except mysql.connector.Error as err:
         print(f"Error inserting rating data: {err}")
         return 0
+
 
 
 
