@@ -95,7 +95,7 @@ def insert_rating_data(rating_data, cursor):
             rating['pt_current'] = safe_cast(rating.get('pt_current'), float, None)
             rating['pt_prior'] = safe_cast(rating.get('pt_prior'), float, None)
 
-            # Convert None to empty strings for string fields or leave None for optional fields
+            # Prepare SQL values, convert None to empty strings for varchar fields where needed
             sql_values = (
                 rating.get('id', None), rating.get('action_company', ''), rating.get('action_pt', ''),
                 rating['adjusted_pt_current'], rating['adjusted_pt_prior'], rating.get('analyst', ''),
@@ -107,7 +107,7 @@ def insert_rating_data(rating_data, cursor):
                 rating.get('url_calendar', ''), rating.get('url_news', '')
             )
             
-            # Debug: Print the rating data and the SQL statement
+            # Debug: Print the rating data and the SQL statement values
             print(f"Attempting to insert rating: {rating}")
             print(f"SQL Values: {sql_values}")
             
@@ -115,7 +115,7 @@ def insert_rating_data(rating_data, cursor):
                 cursor.execute(add_rating, sql_values)
                 added_ratings += 1
             except mysql.connector.Error as err:
-                # Debug: Print error details and SQL statement
+                # Debug: Print error details
                 print(f"Error inserting rating data for {rating.get('ticker', '')} at {rating.get('date', '')}: {err}")
                 continue  # Skip to the next rating if there's an issue with the current one
 
