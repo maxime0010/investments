@@ -117,8 +117,8 @@ def insert_rating_data(rating_data, cursor):
 def fetch_ratings_for_september(ticker, cursor):
     """Fetch ratings for September 2024 for the given ticker."""
     # Set the start and end date for September 2024
-    date_from = "2015-01-01"
-    date_to = "2015-12-31"
+    date_from = "2016-01-01"
+    date_to = "2016-12-31"
 
     params = {
         'company_tickers': ticker,
