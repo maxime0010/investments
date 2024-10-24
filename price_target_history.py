@@ -98,6 +98,9 @@ def insert_rating_data(rating_data, cursor):
             rating['pt_current'] = safe_cast(rating.get('pt_current'), float, None)
             rating['pt_prior'] = safe_cast(rating.get('pt_prior'), float, None)
 
+            # Ensure 'analyst_name' is present even if it's None or missing
+            rating['analyst_name'] = rating.get('analyst_name', '')
+
             try:
                 cursor.execute(add_rating, rating)
                 added_ratings += 1
