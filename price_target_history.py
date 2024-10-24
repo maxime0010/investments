@@ -69,14 +69,17 @@ def safe_cast(value, target_type, default=None):
         return default
 
 def insert_rating_data(rating_data, cursor):
-    """Insert rating data into the MySQL database with safe handling of None values."""
+    """Insert rating data into the MySQL database."""
     try:
         add_rating = ("""
             INSERT INTO ratings 
             (id, action_company, action_pt, adjusted_pt_current, adjusted_pt_prior, analyst, analyst_name,
              currency, date, exchange, importance, name, notes, pt_current, pt_prior, rating_current, 
              rating_prior, ticker, time, updated, url, url_calendar, url_news) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%(id)s, %(action_company)s, %(action_pt)s, %(adjusted_pt_current)s, %(adjusted_pt_prior)s, 
+                    %(analyst)s, %(analyst_name)s, %(currency)s, %(date)s, %(exchange)s, %(importance)s, 
+                    %(name)s, %(notes)s, %(pt_current)s, %(pt_prior)s, %(rating_current)s, %(rating_prior)s, 
+                    %(ticker)s, %(time)s, %(updated)s, %(url)s, %(url_calendar)s, %(url_news)s)
             ON DUPLICATE KEY UPDATE
             adjusted_pt_current = VALUES(adjusted_pt_current), 
             adjusted_pt_prior = VALUES(adjusted_pt_prior), 
@@ -89,34 +92,17 @@ def insert_rating_data(rating_data, cursor):
 
         added_ratings = 0
         for rating in rating_data:
-            # Safely cast each value to the appropriate data type and handle missing keys
+            # Safely cast each value to the appropriate data type
             rating['adjusted_pt_current'] = safe_cast(rating.get('adjusted_pt_current'), float, None)
             rating['adjusted_pt_prior'] = safe_cast(rating.get('adjusted_pt_prior'), float, None)
             rating['pt_current'] = safe_cast(rating.get('pt_current'), float, None)
             rating['pt_prior'] = safe_cast(rating.get('pt_prior'), float, None)
 
-            # Prepare SQL values, convert None to empty strings for varchar fields where needed
-            sql_values = (
-                rating.get('id', None), rating.get('action_company', ''), rating.get('action_pt', ''),
-                rating['adjusted_pt_current'], rating['adjusted_pt_prior'], rating.get('analyst', ''),
-                rating.get('analyst_name', ''), rating.get('currency', ''), rating.get('date', ''),
-                rating.get('exchange', ''), rating.get('importance', 0), rating.get('name', ''),
-                rating.get('notes', ''), rating['pt_current'], rating['pt_prior'],
-                rating.get('rating_current', ''), rating.get('rating_prior', ''), rating.get('ticker', ''),
-                rating.get('time', ''), rating.get('updated', ''), rating.get('url', ''),
-                rating.get('url_calendar', ''), rating.get('url_news', '')
-            )
-            
-            # Debug: Print the rating data and the SQL statement values
-            print(f"Attempting to insert rating: {rating}")
-            print(f"SQL Values: {sql_values}")
-            
             try:
-                cursor.execute(add_rating, sql_values)
+                cursor.execute(add_rating, rating)
                 added_ratings += 1
             except mysql.connector.Error as err:
-                # Debug: Print error details
-                print(f"Error inserting rating data for {rating.get('ticker', '')} at {rating.get('date', '')}: {err}")
+                print(f"Error inserting rating data for {rating['ticker']} at {rating['date']}: {err}")
                 continue  # Skip to the next rating if there's an issue with the current one
 
         return added_ratings
@@ -125,13 +111,11 @@ def insert_rating_data(rating_data, cursor):
         print(f"Error inserting rating data: {err}")
         return 0
 
-
-
 def fetch_ratings_for_september(ticker, cursor):
     """Fetch ratings for September 2024 for the given ticker."""
     # Set the start and end date for September 2024
-    date_from = "2013-01-01"
-    date_to = "2013-12-31"
+    date_from = "2014-01-01"
+    date_to = "2014-12-31"
 
     params = {
         'company_tickers': ticker,
@@ -178,6 +162,9 @@ def exit_program():
 # Script execution
 try:
     fetch_and_store_ratings(tickers)
+    exit_program()
+except Exception as e:
+    print(f"An error occurred: {e}")
     exit_program()
 except Exception as e:
     print(f"An error occurred: {e}")
